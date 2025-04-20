@@ -2,7 +2,7 @@ use crate::exchange::{AttachmentKey, Exchange, Handler};
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::{Context, Error, LambdaEvent};
 use std::collections::HashMap;
-use crate::handlers::echo_test_middleware::EchoTestLambdaMiddleware;
+use crate::handlers::invoke_lambda_handler::AWSLambdaFunctionProxyHandler;
 
 pub const LAMBDA_CONTEXT: AttachmentKey = AttachmentKey(4);
 
@@ -12,7 +12,8 @@ pub const LAMBDA_CONTEXT: AttachmentKey = AttachmentKey(4);
 /// - https://github.com/awslabs/aws-lambda-rust-runtime/tree/main/examples
 pub(crate) async fn entry(event: LambdaEvent<ApiGatewayProxyRequest>) -> Result<ApiGatewayProxyResponse, Error> {
 
-    let middleware: Vec<Box<dyn Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, HashMap<String, String>> + Send>> = vec![Box::new(EchoTestLambdaMiddleware)];
+    let proxy_handler = AWSLambdaFunctionProxyHandler::new().await;
+    let middleware: Vec<Box<dyn Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, HashMap<String, String>> + Send>> = vec![Box::new(proxy_handler)];
     let mut executor = LambdaMiddlewareExecutor::new(middleware);
     let (payload, context) = event.into_parts();
     let mut exchange: Exchange<ApiGatewayProxyRequest, ApiGatewayProxyResponse, HashMap<String, String>> = Exchange::new();

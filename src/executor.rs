@@ -1,24 +1,48 @@
-use crate::exchange::{AttachmentKey, Exchange, Handler};
+use crate::exchange::{AttachmentKey, Exchange};
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::{Context, Error, LambdaEvent};
 use std::collections::HashMap;
-use crate::handlers::invoke_lambda_handler::AWSLambdaFunctionProxyHandler;
+use std::env;
+use std::str::FromStr;
+use crate::config::config::LoadMethod;
+use crate::handlers::Handler;
+use crate::handlers::invoke_lambda_handler::{AWSLambdaFunctionProxyHandler, AWSLambdaFunctionProxyHandlerConfig};
 
 pub const LAMBDA_CONTEXT: AttachmentKey = AttachmentKey(4);
+pub(crate) const LOAD_METHOD: &str = "LOAD_METHOD";
+const CACHE_CONFIGS: &str = "CACHE_CONFIGS";
 
-/// This is the main body for the function.
-/// Write your code inside it.
-/// There are some code example in the following URLs:
-/// - https://github.com/awslabs/aws-lambda-rust-runtime/tree/main/examples
+
+fn load_handlers() -> Vec<Box<dyn Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>>> {
+    let ev_load_method = match match env::var(LOAD_METHOD) {
+        Ok(v) => {
+            LoadMethod::from_str(v.as_str())
+        },
+        Err(_) => Ok(LoadMethod::Default)
+    } {
+        Ok(method) => method,
+        Err(_) => todo!("Handle invalid load method from env variables.")
+    };
+
+    let ev_cache_configs: bool = match env::var(CACHE_CONFIGS) {
+        Ok(v) => v.parse::<bool>().unwrap_or_default(),
+        Err(_) => false
+    };
+
+    todo!()
+}
+
 pub(crate) async fn entry(event: LambdaEvent<ApiGatewayProxyRequest>) -> Result<ApiGatewayProxyResponse, Error> {
 
-    let proxy_handler = AWSLambdaFunctionProxyHandler::new().await;
-    let middleware: Vec<Box<dyn Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, HashMap<String, String>> + Send>> = vec![Box::new(proxy_handler)];
+
+    let proxy_handler = AWSLambdaFunctionProxyHandler::new(AWSLambdaFunctionProxyHandlerConfig::default()).await;
+
+
+    let middleware: Vec<Box<dyn Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> + Send>> = vec![Box::new(proxy_handler)];
     let mut executor = LambdaMiddlewareExecutor::new(middleware);
     let (payload, context) = event.into_parts();
-    let mut exchange: Exchange<ApiGatewayProxyRequest, ApiGatewayProxyResponse, HashMap<String, String>> = Exchange::new();
+    let mut exchange: Exchange<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> = Exchange::new();
     exchange.save_input(payload);
-    exchange.add_attachment::<Context>(LAMBDA_CONTEXT, Box::new(context));
     for middleware in &executor.middlewares {
         match middleware.process(&mut exchange).await {
             Ok(_) => {}
@@ -31,7 +55,7 @@ pub(crate) async fn entry(event: LambdaEvent<ApiGatewayProxyRequest>) -> Result<
 pub struct LambdaMiddlewareExecutor {
     middlewares: Vec<
         Box<
-            dyn Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, HashMap<String, String>>
+            dyn Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>
                 + Send,
         >,
     >,
@@ -44,7 +68,7 @@ impl LambdaMiddlewareExecutor {
                 dyn Handler<
                         ApiGatewayProxyRequest,
                         ApiGatewayProxyResponse,
-                        HashMap<String, String>,
+                        Context,
                     > + Send,
             >,
         >,

@@ -5,22 +5,6 @@ use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not};
 use std::pin::Pin;
 use std::sync::Arc;
 
-pub trait Handler<I, O, M>: Send
-where
-    I: Default + Send,
-    O: Default + Send,
-    M: Send,
-{
-
-    fn process<'i1, 'i2, 'o>(
-        &'i1 self,
-        context: &'i2 mut Exchange<I, O, M>,
-    ) -> Pin<Box<dyn Future<Output = Result<(), ()>> + Send + 'o>>
-    where
-        'i1: 'o,
-        'i2: 'o,
-        Self: 'o;
-}
 
 pub struct Exchange<I, O, M>
 where
@@ -97,7 +81,7 @@ where
         self.input_listeners.push(Callback::new(callback))
     }
 
-    pub fn add_output_listener(&mut self, callback: impl Fn(Box<&Self>) + Send + 'static)
+    pub fn add_output_listener(&mut self, callback: impl FnMut(Box<&Self>) + Send + 'static)
     where
         Self: Send,
         Self: Sized,
@@ -106,22 +90,26 @@ where
     }
 
     fn execute_input_listeners(&mut self) -> Result<(), ()> {
-        self.execute_callbacks(&self.input_listeners)
+        Self::execute_callbacks(self, CallbackType::Request)
     }
 
     fn execute_output_listeners(&mut self) -> Result<(), ()> {
-        self.execute_callbacks(&self.output_listeners)
+        Self::execute_callbacks(self, CallbackType::Response)
     }
 
-    fn execute_callbacks(&self, callbacks: &Vec<Callback<Self>>) -> Result<(), ()>
+    fn execute_callbacks(exchange: &mut Self, callback_type: CallbackType) -> Result<(), ()>
     where
         Self: Send,
     {
+        let callbacks = match callback_type {
+            CallbackType::Request => &mut exchange.input_listeners,
+            CallbackType::Response => &mut exchange.output_listeners
+        };
         let mut pos = 0usize;
         while !callbacks.is_empty() && pos < callbacks.len() {
             log::trace!("Executing callback {}", pos);
             match callbacks.get(pos) {
-                Some(callback) => callback.invoke(Box::new(self)),
+                Some(callback) => callback.invoke(Box::new(exchange)),
                 None => return Err(()),
             }
             pos += 1;
@@ -135,6 +123,10 @@ where
 
     pub fn input(&self) -> Result<&I, ()> {
         Ok(&self.input)
+    }
+
+    pub fn input_mut(&mut self) -> Result<&mut I, ()> {
+        Ok(&mut self.input)
     }
 
     pub fn consume_request(&mut self) -> Result<I, ()> {
@@ -152,6 +144,14 @@ where
         self.output = response;
     }
 
+    pub fn output(&self) -> Result<&O, ()> {
+        Ok(&self.output)
+    }
+
+    pub fn output_mut(&mut self) -> Result<&mut O, ()> {
+        Ok(&mut self.output)
+    }
+
     pub fn consume_output(&mut self) -> Result<O, ()> {
         match self.execute_output_listeners() {
             Ok(_) => {
@@ -162,6 +162,11 @@ where
             Err(_) => Err(()),
         }
     }
+}
+
+enum CallbackType {
+    Request,
+    Response
 }
 
 /* I wanted to make this struct use TypeId::of::<>() but it's not stable. */
@@ -176,16 +181,16 @@ impl AttachmentKey {
 }
 
 pub struct Callback<T: Send + ?Sized> {
-    callback: Box<dyn Fn(Box<&T>) + Send>,
+    callback: Box<dyn FnMut(Box<&T>) + Send>,
 }
 impl<T: Send + ?Sized> Callback<T> {
-    pub fn new(callback: impl Fn(Box<&T>) + Send + 'static) -> Self {
+    pub fn new(callback: impl FnMut(Box<&T>) + Send + 'static) -> Self {
         Self {
             callback: Box::new(callback),
         }
     }
 
-    pub fn invoke(&self, context: Box<&T>) {
+    pub fn invoke(&mut self, context: Box<&T>) {
         (self.callback)(context);
     }
 }

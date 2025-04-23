@@ -8,6 +8,16 @@ mod health_check_handler;
 mod traceability_handler;
 mod cors_handler;
 mod header_handler;
+mod sanitizer_handler;
+mod jwt_verify_handler;
+mod basic_auth_handler;
+mod swt_verify_handler;
+mod specification_handler;
+mod body_transform_handler;
+mod payload_validation_handler;
+mod router_handler;
+mod metrics_handler;
+mod limit_handler;
 
 pub trait Handler<I, O, M>: Send
 where

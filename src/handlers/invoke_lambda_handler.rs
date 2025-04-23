@@ -11,6 +11,8 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::ops::Add;
 use std::pin::Pin;
+use crate::executor::HandlerExecutionError;
+use crate::status::{HandlerStatus, HandlerStatusCode};
 
 pub const FUNCTION_NAME_SEPARATOR: &str = "@";
 
@@ -60,10 +62,13 @@ impl LambdaProxyHandler {
 impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>
     for LambdaProxyHandler
 {
+    type Err = HandlerExecutionError;
+    type Status = HandlerStatus;
+
     fn process<'i1, 'i2, 'o>(
         &'i1 self,
         exchange: &'i2 mut Exchange<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>,
-    ) -> Pin<Box<dyn Future<Output = Result<(), ()>> + Send + 'o>>
+    ) -> Pin<Box<dyn Future<Output = Result<Self::Status, Self::Err>> + Send + 'o>>
     where
         'i1: 'o,
         'i2: 'o,
@@ -71,6 +76,14 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>
     {
         let client = self.lambda_client.clone();
         Box::pin(async move {
+
+            if !self.config.enabled {
+                return Ok(HandlerStatus::from((
+                    HandlerStatusCode::Disabled,
+                    "LambdaProxyHandler is disabled."
+                )));
+            }
+
             match exchange.consume_request() {
                 Ok(request) => {
                     let payload = serde_json::to_string(&request).unwrap();
@@ -104,12 +117,12 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>
                                     |_| todo!("failed to get response from lambda function call."),
                                 );
                             exchange.save_output(lambda_response);
-                            Ok(())
+                            Ok(HandlerStatus::from(HandlerStatusCode::RequestCompleted))
                         }
-                        Err(_) => todo!("Handle SDK error"),
+                        Err(_) => Ok(HandlerStatus::from(HandlerStatusCode::ServerError)),
                     }
                 }
-                Err(_) => todo!("Handle no request failure"),
+                Err(_) => Ok(HandlerStatus::from(HandlerStatusCode::ServerError)),
             }
         })
     }

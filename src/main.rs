@@ -5,6 +5,7 @@ mod executor;
 mod exchange;
 mod handlers;
 mod config;
+mod status;
 
 use executor::entry;
 

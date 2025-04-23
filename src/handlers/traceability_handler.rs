@@ -7,6 +7,8 @@ use log::log;
 use serde::{Deserialize, Serialize};
 use std::future::Future;
 use std::pin::Pin;
+use crate::executor::HandlerExecutionError;
+use crate::status::{HandlerStatus, HandlerStatusCode};
 
 #[derive(Serialize, Deserialize, Default, Clone)]
 pub(crate) struct TraceabilityHandlerConfig {
@@ -60,10 +62,13 @@ const CORR_H_ATTACHMENT_KEY: AttachmentKey = AttachmentKey(9);
 const TRACE_H_ATTACHMENT_KEY: AttachmentKey = AttachmentKey(10);
 
 impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for TraceabilityHandler {
+    type Err = HandlerExecutionError;
+    type Status = HandlerStatus;
+
     fn process<'i1, 'i2, 'o>(
         &'i1 self,
         exchange: &'i2 mut Exchange<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>,
-    ) -> Pin<Box<dyn Future<Output = Result<(), ()>> + Send + 'o>>
+    ) -> Pin<Box<dyn Future<Output = Result<Self::Status, Self::Err>> + Send + 'o>>
     where
         'i1: 'o,
         'i2: 'o,
@@ -141,7 +146,7 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for Trace
                     .insert(inserted_header_name, inserted_header_value);
             }
 
-            Ok(())
+            Ok(HandlerStatus::from(HandlerStatusCode::Ok))
         })
     }
 }

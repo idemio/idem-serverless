@@ -1,17 +1,20 @@
 use crate::exchange::Exchange;
+use crate::executor::HandlerExecutionError;
 use crate::handlers::cors_handler::{CorsHandler, CorsHandlerConfig};
 use crate::handlers::header_handler::{HeaderHandler, HeaderHandlerConfig};
-use crate::handlers::health_check_handler::{HealthCheckHandlerConfig, HealthCheckHandler};
+use crate::handlers::health_check_handler::{HealthCheckHandler, HealthCheckHandlerConfig};
 use crate::handlers::invoke_lambda_handler::{LambdaProxyHandler, LambdaProxyHandlerConfig};
 use crate::handlers::sanitizer_handler::SanitizerHandler;
 use crate::handlers::specification_handler::SpecificationHandler;
 use crate::handlers::traceability_handler::{TraceabilityHandler, TraceabilityHandlerConfig};
+use crate::status::HandlerStatus;
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::Context;
 use std::fmt::{Debug, Display, Formatter};
 use std::future::Future;
 use std::pin::Pin;
 use std::str::FromStr;
+use std::string::ToString;
 
 mod basic_auth_handler;
 mod body_transform_handler;
@@ -36,10 +39,13 @@ where
     O: Default + Send,
     M: Send,
 {
+    type Err;
+    type Status;
+
     fn process<'i1, 'i2, 'o>(
         &'i1 self,
         exchange: &'i2 mut Exchange<I, O, M>,
-    ) -> Pin<Box<dyn Future<Output = Result<(), ()>> + Send + 'o>>
+    ) -> Pin<Box<dyn Future<Output = Result<Self::Status, Self::Err>> + Send + 'o>>
     where
         'i1: 'o,
         'i2: 'o,
@@ -67,7 +73,17 @@ pub enum HandlerRegister {
     HealthCheckHandler(HealthCheckHandler),
     SanitizerHandler(SanitizerHandler),
     SpecificationHandler(SpecificationHandler),
-    Custom(Box<dyn Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>>),
+    Custom(
+        Box<
+            dyn Handler<
+                ApiGatewayProxyRequest,
+                ApiGatewayProxyResponse,
+                Context,
+                Err = HandlerExecutionError,
+                Status = HandlerStatus,
+            >,
+        >,
+    ),
 }
 
 #[derive(Debug)]
@@ -98,7 +114,6 @@ impl AsyncFromStr for HandlerRegister {
         Self: 'o,
     {
         Box::pin(async move {
-
             // TODO - handle loading configurations here instead of using default...
             match s.to_lowercase().as_str() {
                 "idem.proxyhandler" => Ok(HandlerRegister::ProxyHandler(

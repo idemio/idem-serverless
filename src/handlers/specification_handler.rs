@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
+use crate::executor::HandlerExecutionError;
+use crate::status::HandlerStatus;
 
 #[derive(Deserialize, Serialize, Default, Clone)]
 pub(crate) struct SpecificationHandlerConfig {
@@ -20,10 +22,13 @@ pub(crate) struct SpecificationHandler {
 }
 
 impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for SpecificationHandler {
+    type Err = HandlerExecutionError;
+    type Status = HandlerStatus;
+
     fn process<'i1, 'i2, 'o>(
         &'i1 self,
         exchange: &'i2 mut Exchange<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>,
-    ) -> Pin<Box<dyn Future<Output = Result<(), ()>> + Send + 'o>>
+    ) -> Pin<Box<dyn Future<Output = Result<Self::Status, Self::Err>> + Send + 'o>>
     where
         'i1: 'o,
         'i2: 'o,

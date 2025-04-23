@@ -9,6 +9,8 @@ use lambda_http::Context;
 use serde::{Deserialize, Serialize};
 use std::future::Future;
 use std::pin::Pin;
+use crate::executor::HandlerExecutionError;
+use crate::status::{HandlerStatus, HandlerStatusCode};
 
 const HEALTH_STATUS: u32 = 200u32;
 const HEALTH_BODY: &str = "OK";
@@ -42,10 +44,13 @@ impl HealthCheckHandler {
 }
 
 impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for HealthCheckHandler {
+    type Err = HandlerExecutionError;
+    type Status = HandlerStatus;
+
     fn process<'i1, 'i2, 'o>(
         &'i1 self,
         exchange: &'i2 mut Exchange<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>,
-    ) -> Pin<Box<dyn Future<Output = Result<(), ()>> + Send + 'o>>
+    ) -> Pin<Box<dyn Future<Output = Result<Self::Status, Self::Err>> + Send + 'o>>
     where
         'i1: 'o,
         'i2: 'o,
@@ -54,41 +59,40 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for Healt
         /* maybe we can grab this from a central location instead of the struct itself? cache? */
         let client = self.lambda_client.clone();
         Box::pin(async move {
-            if self.config.enabled {
-                let mut response = ApiGatewayProxyResponse::default();
-                let response_status: u32 = if self.config.downstream_enabled {
-                    let payload = Blob::new(self.config.downstream_function_health_payload.clone());
-                    let function_name = self.config.downstream_function.clone();
-                    match client
-                        .unwrap()
-                        .invoke()
-                        .function_name(&function_name)
-                        .payload(payload)
-                        .send()
-                        .await
-                    {
-                        Ok(response) => response.status_code as u32,
-                        Err(_) => 503u32,
-                    }
-                } else {
-                    HEALTH_STATUS
-                };
-
-                response
-                    .headers
-                    .insert(CONTENT_TYPE, "plain/text".parse().unwrap());
-                if response_status.gt(&200u32) && response_status.lt(&300u32) {
-                    response.body = Some(HEALTH_BODY.into());
-                    response.status_code = HEALTH_STATUS as i64
-                } else {
-                    response.status_code = response_status as i64;
-                    response.body = Some(HEALTH_ERROR.into());
-                }
-                exchange.save_output(response);
-                Ok(())
-            } else {
-                Err(())
+            if !self.config.enabled {
+                return Ok(HandlerStatus::from(HandlerStatusCode::Disabled))
             }
+            let mut response = ApiGatewayProxyResponse::default();
+            let response_status: u32 = if self.config.downstream_enabled {
+                let payload = Blob::new(self.config.downstream_function_health_payload.clone());
+                let function_name = self.config.downstream_function.clone();
+                match client
+                    .unwrap()
+                    .invoke()
+                    .function_name(&function_name)
+                    .payload(payload)
+                    .send()
+                    .await
+                {
+                    Ok(response) => response.status_code as u32,
+                    Err(_) => 503u32,
+                }
+            } else {
+                HEALTH_STATUS
+            };
+
+            response
+                .headers
+                .insert(CONTENT_TYPE, "plain/text".parse().unwrap());
+            if response_status.gt(&200u32) && response_status.lt(&300u32) {
+                response.body = Some(HEALTH_BODY.into());
+                response.status_code = HEALTH_STATUS as i64
+            } else {
+                response.status_code = response_status as i64;
+                response.body = Some(HEALTH_ERROR.into());
+            }
+            exchange.save_output(response);
+            Ok(HandlerStatus::from(HandlerStatusCode::Ok))
         })
     }
 }

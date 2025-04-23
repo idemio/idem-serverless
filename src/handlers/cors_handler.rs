@@ -7,6 +7,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
+use crate::executor::HandlerExecutionError;
+use crate::status::{HandlerStatus, HandlerStatusCode};
+
 const ORIGIN_HEADER_KEY: &str = "Origin";
 const ACCESS_CONTROL_REQUEST_METHOD: &str = "Access-Control-Request-Method";
 const ACCESS_CONTROL_REQUEST_HEADERS: &str = "Access-Control-Request-Headers";
@@ -85,10 +88,13 @@ impl CorsHandler {
 const ORIGIN_ATTACHMENT_KEY: AttachmentKey = AttachmentKey(4);
 
 impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for CorsHandler {
+    type Err = HandlerExecutionError;
+    type Status = HandlerStatus;
+
     fn process<'i1, 'i2, 'o>(
         &'i1 self,
         exchange: &'i2 mut Exchange<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>,
-    ) -> Pin<Box<dyn Future<Output = Result<(), ()>> + Send + 'o>>
+    ) -> Pin<Box<dyn Future<Output = Result<Self::Status, Self::Err>> + Send + 'o>>
     where
         'i1: 'o,
         'i2: 'o,
@@ -96,7 +102,7 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for CorsH
     {
         Box::pin(async move {
             if !self.config.enabled {
-                return Ok(())
+                return Ok(HandlerStatus::from(HandlerStatusCode::Disabled))
             }
 
             let mut found_origin_header: Option<String> = None;
@@ -148,9 +154,7 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for CorsH
                         /* invalid origin, early return */
                         response.status_code = 403;
                         exchange.save_output(response);
-
-                        // TODO - probably best to return a status obj here or something
-                        return Ok(());
+                        return Ok(HandlerStatus::from(HandlerStatusCode::RequestCompleted));
                     }
 
                     response.headers.insert(
@@ -197,7 +201,7 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for CorsH
                         .any(|origin| origin.to_lowercase().eq(origin_header_value))
                     {
                         // TODO - Handle validation failure return.
-                        return Err(());
+                        return Ok(HandlerStatus::from(HandlerStatusCode::RequestCompleted));
                     }
                 }
             }
@@ -219,17 +223,17 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for CorsH
                     }
                 });
             }
-            Ok(())
+            Ok(HandlerStatus::from(HandlerStatusCode::Ok))
         })
     }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::handlers::cors_handler::CorsHandler;
+    use crate::handlers::cors_handler::{CorsHandler, CorsHandlerConfig};
 
     #[test]
-    fn test_string_find() {
+    fn test_default_port_filtering() {
         let http_url = "http://testurl.com:80";
         let sanitized_url = CorsHandler::remove_default_ports(http_url);
         assert_eq!(sanitized_url, "http://testurl.com");
@@ -242,4 +246,13 @@ mod test {
         let sanitized_url = CorsHandler::remove_default_ports(http_url);
         assert_eq!(sanitized_url, "http://[2001:db8:4006:812::200e]");
     }
+
+    // TODO - test cors functionality using tokio test: https://tokio.rs/tokio/topics/testing
+    #[tokio::test]
+    async fn test_cors_handler() {
+        let mut cors_handler_config = CorsHandlerConfig::default();
+
+    }
+
+
 }

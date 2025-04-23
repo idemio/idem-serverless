@@ -7,8 +7,6 @@ use lambda_http::Context;
 use serde::{Deserialize, Serialize};
 use std::future::Future;
 use std::pin::Pin;
-use aws_sdk_lambda::config::http::HttpResponse;
-use aws_sdk_lambda::operation::invoke::{InvokeError, InvokeOutput};
 use aws_sdk_lambda::primitives::Blob;
 use lambda_http::http::header::CONTENT_TYPE;
 
@@ -16,7 +14,7 @@ const HEALTH_STATUS: u32 = 200u32;
 const HEALTH_BODY: &str = "OK";
 const HEALTH_ERROR: &str = "ERROR";
 
-#[derive(Serialize, Deserialize, Default, Clone, Debug)]
+#[derive(Serialize, Deserialize, Default, Clone)]
 pub struct AWSHealCheckHandlerConfig {
     enabled: bool,
     use_json: bool,
@@ -26,7 +24,7 @@ pub struct AWSHealCheckHandlerConfig {
     downstream_function_health_payload: String,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct AWSHealthCheckHandler {
     lambda_client: Option<LambdaClient>,
     config: AWSHealCheckHandlerConfig,

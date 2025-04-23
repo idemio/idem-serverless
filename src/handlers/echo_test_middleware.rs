@@ -5,7 +5,7 @@ use std::future::Future;
 use std::pin::Pin;
 use crate::handlers::Handler;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub(crate) struct EchoTestLambdaMiddleware;
 
 impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, HashMap<String, String>>

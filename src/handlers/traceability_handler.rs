@@ -8,7 +8,7 @@ use lambda_http::http::{HeaderMap, HeaderName, HeaderValue};
 use log::log;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Default, Clone, Debug)]
+#[derive(Serialize, Deserialize, Default, Clone)]
 pub(crate) struct TraceabilityHandlerConfig {
     enabled: bool,
     autogen_correlation_id: bool,
@@ -18,7 +18,7 @@ pub(crate) struct TraceabilityHandlerConfig {
     traceability_logging_field_name: String
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub(crate) struct TraceabilityHandler {
     config: TraceabilityHandlerConfig
 }

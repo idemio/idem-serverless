@@ -7,6 +7,7 @@ pub(crate) mod invoke_lambda_handler;
 mod health_check_handler;
 mod traceability_handler;
 mod cors_handler;
+mod header_handler;
 
 pub trait Handler<I, O, M>: Send
 where

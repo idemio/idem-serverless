@@ -1,6 +1,5 @@
-use crate::exchange::Exchange;
+use crate::exchange::{AttachmentKey, Exchange};
 use crate::handlers::Handler;
-use aws_sdk_lambda::primitives::event_stream::Header;
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::http::HeaderValue;
 use lambda_http::Context;
@@ -8,20 +7,11 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
-
-const ACCESS_CONTROL_REQUEST_METHOD_HEADER_KEY: &str = "Access-Control-Request-Method";
-const ACCESS_CONTROL_ALLOW_ORIGIN_HEADER_KEY: &str = "Access-Control-Allow-Origin";
-const ACCESS_CONTROL_ALLOW_CREDENTIALS_HEADER_KEY: &str = "Access-Control-Allow-Credentials";
-const ACCESS_CONTROL_EXPOSE_HEADERS_HEADER_KEY: &str = "Access-Control-Expose-Headers";
-const ACCESS_CONTROL_MAX_AGE_HEADER_KEY: &str = "Access-Control-Max-Age";
-const ACCESS_CONTROL_ALLOW_METHODS_HEADER_KEY: &str = "Access-Control-Allow-Methods";
-const ACCESS_CONTROL_ALLOW_HEADERS_HEADER_KEY: &str = "Access-Control-Allow-Headers";
 const ORIGIN_HEADER_KEY: &str = "Origin";
 const ACCESS_CONTROL_REQUEST_METHOD: &str = "Access-Control-Request-Method";
 const ACCESS_CONTROL_REQUEST_HEADERS: &str = "Access-Control-Request-Headers";
 const ACCESS_CONTROL_ALLOW_ORIGIN: &str = "Access-Control-Allow-Origin";
 const ACCESS_CONTROL_ALLOW_CREDENTIALS: &str = "Access-Control-Allow-Credentials";
-const ACCESS_CONTROL_EXPOSE_HEADERS: &str = "Access-Control-Expose-Headers";
 const ACCESS_CONTROL_MAX_AGE: &str = "Access-Control-Max-Age";
 const ACCESS_CONTROL_ALLOW_METHODS: &str = "Access-Control-Allow-Methods";
 const ACCESS_CONTROL_ALLOW_HEADERS: &str = "Access-Control-Allow-Headers";
@@ -84,6 +74,8 @@ impl CorsHandler {
     }
 }
 
+const ORIGIN_ATTACHMENT_KEY: AttachmentKey = AttachmentKey(4);
+
 impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for CorsHandler {
     fn process<'i1, 'i2, 'o>(
         &'i1 self,
@@ -95,122 +87,127 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for CorsH
         Self: 'o,
     {
         Box::pin(async move {
-            if self.config.enabled {
-                let request = exchange.input().unwrap();
-                if let Some(origin_header) = request
-                    .headers
-                    .iter()
-                    .find(|(k, v)| k.to_string().to_lowercase() == ORIGIN_HEADER_KEY.to_lowercase())
-                {
-                    let origin_header_value =
-                        Self::remove_default_ports(origin_header.1.to_str().unwrap());
+            if !self.config.enabled {
+                return Ok(())
+            }
 
-                    let mut exchange_allowed_origins = self.config.allowed_origins.clone();
-                    let mut exchange_allowed_methods = self.config.allowed_methods.clone();
+            let mut found_origin_header: Option<String> = None;
+            let request = exchange.input().unwrap();
+            if let Some(origin_header) = request
+                .headers
+                .iter()
+                .find(|(k, v)| k.to_string().to_lowercase() == ORIGIN_HEADER_KEY.to_lowercase())
+            {
+                let origin_header_value =
+                    Self::remove_default_ports(origin_header.1.to_str().unwrap());
+                found_origin_header = Some(origin_header_value.to_string());
 
-                    /* check path specific configuration */
-                    if !self.config.path_prefix_cors_config.is_empty() {
-                        let request_path = request.path.clone().unwrap_or("/".to_string());
-                        let path_config = self
-                            .config
-                            .path_prefix_cors_config
-                            .iter()
-                            .find(|(k, _)| request_path.starts_with(k.as_str()))
-                            .map(|(_, v)| v.clone());
+                let mut exchange_allowed_origins = self.config.allowed_origins.clone();
+                let mut exchange_allowed_methods = self.config.allowed_methods.clone();
 
-                        if path_config.is_some() {
-                            let path_config = path_config.unwrap();
-                            exchange_allowed_origins.extend(path_config.allowed_origins);
-                            exchange_allowed_methods.extend(path_config.allowed_methods);
-                        }
+                /* check path specific configuration */
+                if !self.config.path_prefix_cors_config.is_empty() {
+                    let request_path = request.path.clone().unwrap_or("/".to_string());
+                    let path_config = self
+                        .config
+                        .path_prefix_cors_config
+                        .iter()
+                        .find(|(k, _)| request_path.starts_with(k.as_str()))
+                        .map(|(_, v)| v.clone());
+
+                    if path_config.is_some() {
+                        let path_config = path_config.unwrap();
+                        exchange_allowed_origins.extend(path_config.allowed_origins);
+                        exchange_allowed_methods.extend(path_config.allowed_methods);
                     }
-
-                    /* check if preflight */
-                    if request.http_method.eq("OPTIONS") {
-                        let mut response = ApiGatewayProxyResponse::default();
-                        if exchange_allowed_origins
-                            .iter()
-                            .any(|origin| origin.to_lowercase().eq(origin_header_value))
-                        {
-                            response.headers.insert(
-                                ACCESS_CONTROL_ALLOW_ORIGIN,
-                                HeaderValue::from_str(origin_header_value).unwrap(),
-                            );
-                            response
-                                .headers
-                                .insert("Vary", HeaderValue::from_str(ORIGIN_HEADER_KEY).unwrap());
-                        } else {
-                            /* invalid origin, early return */
-                            response.status_code = 403;
-                            exchange.save_output(response);
-                            return Ok(());
-                        }
-
-                        response.headers.insert(
-                            ACCESS_CONTROL_ALLOW_METHODS,
-                            HeaderValue::from_str(
-                                exchange_allowed_methods
-                                    .iter()
-                                    .map(|x| x.to_string() + ",")
-                                    .collect::<Vec<_>>()
-                                    .join(",")
-                                    .as_str(),
-                            )
-                            .unwrap(),
-                        );
-
-                        if let Some((_, ac_header_value)) =
-                            request.headers.iter().find(|(header_key, _)| {
-                                header_key.to_string().to_lowercase()
-                                    == ACCESS_CONTROL_REQUEST_HEADERS.to_lowercase()
-                            })
-                        {
-                            response
-                                .headers
-                                .insert(ACCESS_CONTROL_ALLOW_HEADERS, ac_header_value.clone());
-                        } else {
-                            response.headers.insert(
-                                ACCESS_CONTROL_ALLOW_HEADERS,
-                                HeaderValue::from_str(
-                                    "Content-Type, WWW-Authenticate, Authorization",
-                                )
-                                .unwrap(),
-                            );
-                        }
-
-                        response.headers.insert(
-                            ACCESS_CONTROL_ALLOW_CREDENTIALS,
-                            HeaderValue::from_str("true").unwrap(),
-                        );
-                        response.headers.insert(
-                            ACCESS_CONTROL_MAX_AGE,
-                            HeaderValue::from_str("3600").unwrap(),
-                        );
-                    } else {
-                        if !exchange_allowed_origins
-                            .iter()
-                            .any(|origin| origin.to_lowercase().eq(origin_header_value))
-                        {
-                            // TODO - Handle validation failure return.
-                            return Err(());
-                        }
-                    }
-
-                    exchange.add_output_listener(|x| {
-                        let input = exchange.input().unwrap();
-                        if let Some((_, request_origin_header_value)) =
-                            input.headers.iter().find(|(k, _)| {
-                                k.to_string().to_lowercase() == ORIGIN_HEADER_KEY.to_lowercase()
-                            })
-                        {
-                            let output = exchange.output_mut().unwrap();
-                            output.headers.insert(
-                                ACCESS_CONTROL_ALLOW_ORIGIN,
-                                request_origin_header_value.clone(),
-                            );
-                        }
-                    })
                 }
+
+                /* check if preflight */
+                if request.http_method.eq("OPTIONS") {
+                    let mut response = ApiGatewayProxyResponse::default();
+                    if exchange_allowed_origins
+                        .iter()
+                        .any(|origin| origin.to_lowercase().eq(origin_header_value))
+                    {
+                        response.headers.insert(
+                            ACCESS_CONTROL_ALLOW_ORIGIN,
+                            HeaderValue::from_str(origin_header_value).unwrap(),
+                        );
+                        response
+                            .headers
+                            .insert("Vary", HeaderValue::from_str(ORIGIN_HEADER_KEY).unwrap());
+                    } else {
+                        /* invalid origin, early return */
+                        response.status_code = 403;
+                        exchange.save_output(response);
+                        return Ok(());
+                    }
+
+                    response.headers.insert(
+                        ACCESS_CONTROL_ALLOW_METHODS,
+                        HeaderValue::from_str(
+                            exchange_allowed_methods
+                                .iter()
+                                .map(|x| x.to_string() + ",")
+                                .collect::<Vec<_>>()
+                                .join(",")
+                                .as_str(),
+                        )
+                        .unwrap(),
+                    );
+
+                    if let Some((_, ac_header_value)) =
+                        request.headers.iter().find(|(header_key, _)| {
+                            header_key.to_string().to_lowercase()
+                                == ACCESS_CONTROL_REQUEST_HEADERS.to_lowercase()
+                        })
+                    {
+                        response
+                            .headers
+                            .insert(ACCESS_CONTROL_ALLOW_HEADERS, ac_header_value.clone());
+                    } else {
+                        response.headers.insert(
+                            ACCESS_CONTROL_ALLOW_HEADERS,
+                            HeaderValue::from_str("Content-Type, WWW-Authenticate, Authorization")
+                                .unwrap(),
+                        );
+                    }
+
+                    response.headers.insert(
+                        ACCESS_CONTROL_ALLOW_CREDENTIALS,
+                        HeaderValue::from_str("true").unwrap(),
+                    );
+                    response.headers.insert(
+                        ACCESS_CONTROL_MAX_AGE,
+                        HeaderValue::from_str("3600").unwrap(),
+                    );
+                } else {
+                    if !exchange_allowed_origins
+                        .iter()
+                        .any(|origin| origin.to_lowercase().eq(origin_header_value))
+                    {
+                        // TODO - Handle validation failure return.
+                        return Err(());
+                    }
+                }
+            }
+
+            /* if we found an origin header, add it to the response as well. */
+            /* if the handler is disabled or the origin header could not be found in the request, 'found_origin_header' will be None. */
+            if let Some(found_origin_header) = found_origin_header {
+                exchange
+                    .attachments_mut()
+                    .add_attachment::<String>(ORIGIN_ATTACHMENT_KEY, Box::new(found_origin_header));
+                exchange.add_output_listener(|response, attachments| {
+                    if let Some(origin_header_value) =
+                        attachments.attachment::<String>(ORIGIN_ATTACHMENT_KEY)
+                    {
+                        response.headers.insert(
+                            ACCESS_CONTROL_ALLOW_ORIGIN,
+                            HeaderValue::from_str(origin_header_value).unwrap(),
+                        );
+                    }
+                });
             }
             Ok(())
         })
@@ -227,9 +224,9 @@ mod test {
         let sanitized_url = CorsHandler::remove_default_ports(http_url);
         assert_eq!(sanitized_url, "http://testurl.com");
 
-        let http_url = "http://testurl.com:8080";
+        let http_url = "https://testurl.com:8080";
         let sanitized_url = CorsHandler::remove_default_ports(http_url);
-        assert_eq!(sanitized_url, "http://testurl.com:8080");
+        assert_eq!(sanitized_url, "https://testurl.com:8080");
 
         let http_url = "http://[2001:db8:4006:812::200e]:80";
         let sanitized_url = CorsHandler::remove_default_ports(http_url);

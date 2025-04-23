@@ -14,7 +14,7 @@ use std::pin::Pin;
 
 pub const FUNCTION_NAME_SEPARATOR: &str = "@";
 
-#[derive(Serialize, Deserialize, Default, Clone, Debug)]
+#[derive(Serialize, Deserialize, Default, Clone)]
 pub(crate) struct AWSLambdaFunctionProxyHandlerConfig {
     enabled: bool,
     functions: HashMap<String, String>,
@@ -40,7 +40,7 @@ impl Config for AWSLambdaFunctionProxyHandlerConfig {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub(crate) struct AWSLambdaFunctionProxyHandler {
     lambda_client: Option<LambdaClient>,
     config: AWSLambdaFunctionProxyHandlerConfig,

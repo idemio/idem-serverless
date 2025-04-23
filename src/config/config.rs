@@ -11,14 +11,9 @@ pub enum LoadMethod {
     Default,
 }
 
+#[derive(Debug)]
 pub struct LoadMethodError {
     method: String
-}
-
-impl Debug for LoadMethodError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Invalid 'LoadMethod' {} provided. Valid options are: 'Remote', 'Programmatically', 'LocalFile', and 'Default'.", self.method)
-    }
 }
 
 impl Display for LoadMethodError {
@@ -43,6 +38,7 @@ impl FromStr for LoadMethod {
     }
 }
 
+#[derive(Debug)]
 pub enum ErrorType {
     MalformedConfig,
     MissingConfig,
@@ -67,41 +63,11 @@ where
     fn load_remote() -> ConfigResult<Self>;
 }
 
+#[derive(Debug)]
 pub(crate) struct LocalFileConfigError {
     path: String,
     filename: String,
     error_type: ErrorType,
-}
-
-impl Debug for LocalFileConfigError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match &self.error_type {
-            ErrorType::MalformedConfig => {
-                write!(f, "File {} found under the path {} is malformed. \
-                           Check to make sure the content of the file is correct and that all fields are valid with matching types. \
-                           See docs for more details",
-                       self.filename,
-                       self.path
-                )
-            },
-            ErrorType::MissingConfig => {
-                write!(f, "File {} found under the path {} cannot be found. \
-                           Check to make sure the provided path is valid and the filename is correct. \
-                           See docs for more details",
-                       self.filename,
-                       self.path
-                )
-            },
-            ErrorType::EmptyConfig => {
-                write!(f, "File {} found under the path {} is either empty or not a file. \
-                           Check to make sure the provided path is valid and the filename is correct. \
-                           See docs for more details",
-                       self.filename,
-                       self.path
-                )
-            }
-        }
-    }
 }
 
 impl Display for LocalFileConfigError {
@@ -116,13 +82,9 @@ impl Display for LocalFileConfigError {
 }
 
 impl Error for LocalFileConfigError {}
-pub(crate) struct RemoteConfigError;
 
-impl Debug for RemoteConfigError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        todo!("impl debug display for RemoteConfigError")
-    }
-}
+#[derive(Debug)]
+pub(crate) struct RemoteConfigError;
 
 impl Display for RemoteConfigError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -131,13 +93,9 @@ impl Display for RemoteConfigError {
 }
 
 impl Error for RemoteConfigError {}
-pub(crate) struct ProgrammaticallyConfigError;
 
-impl Debug for ProgrammaticallyConfigError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        todo!("impl debug display for ProgrammaticallyConfigError")
-    }
-}
+#[derive(Debug)]
+pub(crate) struct ProgrammaticallyConfigError;
 
 impl Display for ProgrammaticallyConfigError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {

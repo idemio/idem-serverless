@@ -43,6 +43,13 @@ pub(crate) struct HeaderHandler {
 }
 
 impl HeaderHandler {
+
+    pub(crate) async fn new(config: HeaderHandlerConfig) -> Self {
+        Self {
+            config,
+        }
+    }
+
     fn remove_headers(headers: &mut HeaderMap, remove_headers: Vec<ModifyHeaderKey>) {
         for header in remove_headers {
             headers.remove(header.0).unwrap();

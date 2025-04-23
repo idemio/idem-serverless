@@ -4,7 +4,7 @@ use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayPr
 use serde::{Deserialize, Serialize};
 use std::future::Future;
 use std::pin::Pin;
-use std::task::Context;
+use lambda_http::Context;
 
 #[derive(Deserialize, Serialize, Clone, Default)]
 pub(crate) struct SanitizerHandlerConfig {

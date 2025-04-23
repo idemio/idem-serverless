@@ -25,6 +25,11 @@ pub(crate) struct TraceabilityHandler {
 }
 
 impl TraceabilityHandler {
+
+    pub(crate) async fn new(config: TraceabilityHandlerConfig) -> Self {
+        Self { config }
+    }
+
     fn find_or_create_uuid(
         headers: &HeaderMap,
         header_name: &str,

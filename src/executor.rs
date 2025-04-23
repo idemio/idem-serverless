@@ -1,48 +1,57 @@
+use crate::config::config::LoadMethod;
 use crate::exchange::{AttachmentKey, Exchange};
+use crate::handlers::Handler;
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::{Context, Error, LambdaEvent};
 use std::collections::HashMap;
 use std::env;
 use std::str::FromStr;
-use crate::config::config::LoadMethod;
-use crate::handlers::Handler;
-use crate::handlers::invoke_lambda_handler::{AWSLambdaFunctionProxyHandler, AWSLambdaFunctionProxyHandlerConfig};
 
 pub const LAMBDA_CONTEXT: AttachmentKey = AttachmentKey(4);
 pub(crate) const LOAD_METHOD: &str = "LOAD_METHOD";
 const CACHE_CONFIGS: &str = "CACHE_CONFIGS";
 
-
-fn load_handlers() -> Vec<Box<dyn Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>>> {
+fn load_handlers() -> Vec<Box<dyn Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>>>
+{
     let ev_load_method = match match env::var(LOAD_METHOD) {
-        Ok(v) => {
-            LoadMethod::from_str(v.as_str())
-        },
-        Err(_) => Ok(LoadMethod::Default)
+        Ok(v) => LoadMethod::from_str(v.as_str()),
+        Err(_) => Ok(LoadMethod::Default),
     } {
         Ok(method) => method,
-        Err(_) => todo!("Handle invalid load method from env variables.")
+        Err(_) => todo!("Handle invalid load method from env variables."),
     };
 
     let ev_cache_configs: bool = match env::var(CACHE_CONFIGS) {
         Ok(v) => v.parse::<bool>().unwrap_or_default(),
-        Err(_) => false
+        Err(_) => false,
     };
 
     todo!()
 }
 
-pub(crate) async fn entry(event: LambdaEvent<ApiGatewayProxyRequest>) -> Result<ApiGatewayProxyResponse, Error> {
+const AUDIT_ATTACHMENT: AttachmentKey = AttachmentKey(11);
 
+pub(crate) async fn entry(
+    event: LambdaEvent<ApiGatewayProxyRequest>,
+) -> Result<ApiGatewayProxyResponse, Error> {
+    // TODO - load handler configuration (from cache if possible)...
 
-    let proxy_handler = AWSLambdaFunctionProxyHandler::new(AWSLambdaFunctionProxyHandlerConfig::default()).await;
-
-
-    let middleware: Vec<Box<dyn Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> + Send>> = vec![Box::new(proxy_handler)];
+    let middleware: Vec<
+        Box<dyn Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> + Send>,
+    > = vec![];
     let mut executor = LambdaMiddlewareExecutor::new(middleware);
     let (payload, context) = event.into_parts();
-    let mut exchange: Exchange<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> = Exchange::new();
+    let mut exchange: Exchange<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> =
+        Exchange::new();
     exchange.save_input(payload);
+    exchange.add_metadata(context);
+
+    // TODO - handle auditing at the end of the request...
+    exchange
+        .attachments_mut()
+        .add_attachment::<HashMap<String, String>>(AUDIT_ATTACHMENT, Box::new(HashMap::<String, String>::new()));
+
+    // TODO - Change the output of each handler from an empty result, to a status object. (exception handler)...
     for middleware in &executor.middlewares {
         match middleware.process(&mut exchange).await {
             Ok(_) => {}
@@ -53,24 +62,14 @@ pub(crate) async fn entry(event: LambdaEvent<ApiGatewayProxyRequest>) -> Result<
 }
 
 pub struct LambdaMiddlewareExecutor {
-    middlewares: Vec<
-        Box<
-            dyn Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>
-                + Send,
-        >,
-    >,
+    middlewares:
+        Vec<Box<dyn Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> + Send>>,
 }
 
 impl LambdaMiddlewareExecutor {
     pub fn new(
         middleware: Vec<
-            Box<
-                dyn Handler<
-                        ApiGatewayProxyRequest,
-                        ApiGatewayProxyResponse,
-                        Context,
-                    > + Send,
-            >,
+            Box<dyn Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> + Send>,
         >,
     ) -> Self {
         Self {

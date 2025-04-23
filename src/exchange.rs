@@ -48,43 +48,17 @@ where
         &mut self.attachments
     }
 
-//    pub fn add_attachment<K>(&mut self, key: AttachmentKey, value: Box<dyn Any + Send>)
-//    where
-//        K: Send + 'static
-//    {
-//        let type_id = TypeId::of::<K>();
-//        self.attachments.insert((key, type_id), value);
-//    }
-//
-//    pub fn attachment<K>(&self, key: AttachmentKey) -> Option<&K>
-//    where
-//        K: Send + 'static,
-//    {
-//        let type_id = TypeId::of::<K>();
-//        if let Some(option_any) = self.attachments.get(&(key, type_id)) {
-//            option_any.downcast_ref::<K>()
-//        } else {
-//            None
-//        }
-//    }
-//
-//    pub fn attachment_mut<K>(&mut self, key: AttachmentKey) -> Option<&mut K>
-//    where
-//        K: Send + 'static,
-//    {
-//        let type_id = TypeId::of::<K>();
-//        if let Some(option_any) = self.attachments.get_mut(&(key, type_id)) {
-//            option_any.downcast_mut::<K>()
-//        } else {
-//            None
-//        }
-//    }
-
-    pub fn add_input_listener(&mut self, callback: impl FnMut(&mut I, &mut Attachments) + Send + 'static) {
+    pub fn add_input_listener(
+        &mut self,
+        callback: impl FnMut(&mut I, &mut Attachments) + Send + 'static,
+    ) {
         self.input_listeners.push(Callback::new(callback));
     }
 
-    pub fn add_output_listener(&mut self, callback: impl FnMut(&mut O, &mut Attachments) + Send + 'static) {
+    pub fn add_output_listener(
+        &mut self,
+        callback: impl FnMut(&mut O, &mut Attachments) + Send + 'static,
+    ) {
         self.output_listeners.push(Callback::new(callback));
     }
 
@@ -150,19 +124,19 @@ where
 }
 
 pub struct Attachments {
-    attachments: HashMap<(AttachmentKey, TypeId), Box<dyn Any + Send>>
+    attachments: HashMap<(AttachmentKey, TypeId), Box<dyn Any + Send>>,
 }
 
 impl Attachments {
     pub fn new() -> Self {
         Self {
-            attachments: HashMap::new()
+            attachments: HashMap::new(),
         }
     }
 
     pub fn add_attachment<K>(&mut self, key: AttachmentKey, value: Box<dyn Any + Send>)
     where
-        K: Send + 'static
+        K: Send + 'static,
     {
         let type_id = TypeId::of::<K>();
         self.attachments.insert((key, type_id), value);
@@ -191,9 +165,9 @@ impl Attachments {
             None
         }
     }
-
 }
 
+// TODO - change how attachment keys work (probably string)
 /* I wanted to make this struct use TypeId::of::<>() but it's not stable. */
 #[derive(PartialOrd, PartialEq, Hash, Eq)]
 pub struct AttachmentKey(pub u32);
@@ -206,12 +180,12 @@ impl AttachmentKey {
 }
 
 pub struct Callback<P> {
-    callback: Box<dyn FnMut(&mut P, &mut Attachments) + Send>
+    callback: Box<dyn FnMut(&mut P, &mut Attachments) + Send>,
 }
 
 impl<P> Callback<P>
 where
-    P: Send + 'static
+    P: Send + 'static,
 {
     pub fn new(callback: impl FnMut(&mut P, &mut Attachments) + Send + 'static) -> Self {
         Self {
@@ -222,5 +196,4 @@ where
     pub fn invoke(&mut self, write: &mut P, attachments: &mut Attachments) {
         (self.callback)(write, attachments);
     }
-
 }

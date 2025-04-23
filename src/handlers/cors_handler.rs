@@ -16,7 +16,7 @@ const ACCESS_CONTROL_MAX_AGE: &str = "Access-Control-Max-Age";
 const ACCESS_CONTROL_ALLOW_METHODS: &str = "Access-Control-Allow-Methods";
 const ACCESS_CONTROL_ALLOW_HEADERS: &str = "Access-Control-Allow-Headers";
 
-#[derive(Deserialize, Serialize, Default, Clone, Debug)]
+#[derive(Deserialize, Serialize, Default, Clone)]
 pub(crate) struct CorsHandlerConfig {
     enabled: bool,
     allowed_origins: Vec<String>,
@@ -24,15 +24,23 @@ pub(crate) struct CorsHandlerConfig {
     path_prefix_cors_config: HashMap<String, CorsHandlerPathConfig>,
 }
 
-#[derive(Deserialize, Serialize, Default, Clone, Debug)]
+#[derive(Deserialize, Serialize, Default, Clone)]
 pub(crate) struct CorsHandlerPathConfig {
     allowed_origins: Vec<String>,
     allowed_methods: Vec<String>,
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Clone)]
 pub(crate) struct CorsHandler {
     config: CorsHandlerConfig,
+}
+
+impl CorsHandler {
+    pub(crate) async fn new(config: CorsHandlerConfig) -> Self {
+        Self {
+            config,
+        }
+    }
 }
 
 impl CorsHandler {
@@ -140,6 +148,8 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for CorsH
                         /* invalid origin, early return */
                         response.status_code = 403;
                         exchange.save_output(response);
+
+                        // TODO - probably best to return a status obj here or something
                         return Ok(());
                     }
 

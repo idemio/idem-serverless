@@ -1,21 +1,21 @@
 use crate::exchange::Exchange;
 use crate::handlers::Handler;
 use aws_config::BehaviorVersion;
+use aws_sdk_lambda::primitives::Blob;
 use aws_sdk_lambda::Client as LambdaClient;
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
+use lambda_http::http::header::CONTENT_TYPE;
 use lambda_http::Context;
 use serde::{Deserialize, Serialize};
 use std::future::Future;
 use std::pin::Pin;
-use aws_sdk_lambda::primitives::Blob;
-use lambda_http::http::header::CONTENT_TYPE;
 
 const HEALTH_STATUS: u32 = 200u32;
 const HEALTH_BODY: &str = "OK";
 const HEALTH_ERROR: &str = "ERROR";
 
 #[derive(Serialize, Deserialize, Default, Clone)]
-pub struct AWSHealCheckHandlerConfig {
+pub struct HealthCheckHandlerConfig {
     enabled: bool,
     use_json: bool,
     timeout: u32,
@@ -25,13 +25,13 @@ pub struct AWSHealCheckHandlerConfig {
 }
 
 #[derive(Clone, Default)]
-pub struct AWSHealthCheckHandler {
+pub struct HealthCheckHandler {
     lambda_client: Option<LambdaClient>,
-    config: AWSHealCheckHandlerConfig,
+    config: HealthCheckHandlerConfig,
 }
 
-impl AWSHealthCheckHandler {
-    pub(crate) async fn new(config: AWSHealCheckHandlerConfig) -> Self {
+impl HealthCheckHandler {
+    pub(crate) async fn new(config: HealthCheckHandlerConfig) -> Self {
         Self {
             lambda_client: Some(LambdaClient::new(
                 &aws_config::load_defaults(BehaviorVersion::latest()).await,
@@ -41,7 +41,7 @@ impl AWSHealthCheckHandler {
     }
 }
 
-impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for AWSHealthCheckHandler {
+impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for HealthCheckHandler {
     fn process<'i1, 'i2, 'o>(
         &'i1 self,
         exchange: &'i2 mut Exchange<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>,
@@ -59,20 +59,24 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for AWSHe
                 let response_status: u32 = if self.config.downstream_enabled {
                     let payload = Blob::new(self.config.downstream_function_health_payload.clone());
                     let function_name = self.config.downstream_function.clone();
-                    match client.unwrap().invoke()
+                    match client
+                        .unwrap()
+                        .invoke()
                         .function_name(&function_name)
                         .payload(payload)
-                        .send().await {
-                        Ok(response) => {
-                            response.status_code as u32
-                        }
-                        Err(_) => 503u32
+                        .send()
+                        .await
+                    {
+                        Ok(response) => response.status_code as u32,
+                        Err(_) => 503u32,
                     }
                 } else {
                     HEALTH_STATUS
                 };
 
-                response.headers.insert(CONTENT_TYPE, "plain/text".parse().unwrap());
+                response
+                    .headers
+                    .insert(CONTENT_TYPE, "plain/text".parse().unwrap());
                 if response_status.gt(&200u32) && response_status.lt(&300u32) {
                     response.body = Some(HEALTH_BODY.into());
                     response.status_code = HEALTH_STATUS as i64

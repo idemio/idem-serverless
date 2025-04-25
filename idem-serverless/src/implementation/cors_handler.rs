@@ -1,5 +1,4 @@
-use crate::exchange::{AttachmentKey, Exchange};
-use crate::handlers::Handler;
+use crate::implementation::Handler;
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::http::HeaderValue;
 use lambda_http::Context;
@@ -7,8 +6,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
-use crate::executor::HandlerExecutionError;
-use crate::status::{HandlerStatus, HandlerStatusCode};
+use idem_handler::exchange::AttachmentKey;
+use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
+use crate::entry::LambdaExchange;
 
 const ORIGIN_HEADER_KEY: &str = "Origin";
 const ACCESS_CONTROL_REQUEST_METHOD: &str = "Access-Control-Request-Method";
@@ -20,17 +20,17 @@ const ACCESS_CONTROL_ALLOW_METHODS: &str = "Access-Control-Allow-Methods";
 const ACCESS_CONTROL_ALLOW_HEADERS: &str = "Access-Control-Allow-Headers";
 
 #[derive(Deserialize, Serialize, Default, Clone)]
-pub(crate) struct CorsHandlerConfig {
-    enabled: bool,
-    allowed_origins: Vec<String>,
-    allowed_methods: Vec<String>,
-    path_prefix_cors_config: HashMap<String, CorsHandlerPathConfig>,
+pub struct CorsHandlerConfig {
+    pub enabled: bool,
+    pub allowed_origins: Vec<String>,
+    pub allowed_methods: Vec<String>,
+    pub path_prefix_cors_config: HashMap<String, CorsHandlerPathConfig>,
 }
 
 #[derive(Deserialize, Serialize, Default, Clone)]
-pub(crate) struct CorsHandlerPathConfig {
-    allowed_origins: Vec<String>,
-    allowed_methods: Vec<String>,
+pub struct CorsHandlerPathConfig {
+    pub allowed_origins: Vec<String>,
+    pub allowed_methods: Vec<String>,
 }
 
 #[derive(Default, Clone)]
@@ -40,9 +40,7 @@ pub(crate) struct CorsHandler {
 
 impl CorsHandler {
     pub(crate) async fn new(config: CorsHandlerConfig) -> Self {
-        Self {
-            config,
-        }
+        Self { config }
     }
 }
 
@@ -88,13 +86,11 @@ impl CorsHandler {
 const ORIGIN_ATTACHMENT_KEY: AttachmentKey = AttachmentKey(4);
 
 impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for CorsHandler {
-    type Err = HandlerExecutionError;
-    type Status = HandlerStatus;
 
     fn process<'i1, 'i2, 'o>(
         &'i1 self,
-        exchange: &'i2 mut Exchange<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>,
-    ) -> Pin<Box<dyn Future<Output = Result<Self::Status, Self::Err>> + Send + 'o>>
+        exchange: &'i2 mut LambdaExchange,
+    ) -> Pin<Box<dyn Future<Output = Result<HandlerStatus, HandlerExecutionError>> + Send + 'o>>
     where
         'i1: 'o,
         'i2: 'o,
@@ -102,7 +98,7 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for CorsH
     {
         Box::pin(async move {
             if !self.config.enabled {
-                return Ok(HandlerStatus::from(HandlerStatusCode::Disabled))
+                return Ok(HandlerStatus::new(Code::DISABLED));
             }
 
             let mut found_origin_header: Option<String> = None;
@@ -154,7 +150,8 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for CorsH
                         /* invalid origin, early return */
                         response.status_code = 403;
                         exchange.save_output(response);
-                        return Ok(HandlerStatus::from(HandlerStatusCode::RequestCompleted));
+                        return Ok(HandlerStatus::new(Code::CLIENT_ERROR)
+                            .set_message("Origin is forbidden"));
                     }
 
                     response.headers.insert(
@@ -201,7 +198,7 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for CorsH
                         .any(|origin| origin.to_lowercase().eq(origin_header_value))
                     {
                         // TODO - Handle validation failure return.
-                        return Ok(HandlerStatus::from(HandlerStatusCode::RequestCompleted));
+                        return Ok(HandlerStatus::new(Code::REQUEST_COMPLETED));
                     }
                 }
             }
@@ -223,14 +220,14 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for CorsH
                     }
                 });
             }
-            Ok(HandlerStatus::from(HandlerStatusCode::Ok))
+            Ok(HandlerStatus::new(Code::OK))
         })
     }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::handlers::cors_handler::{CorsHandler, CorsHandlerConfig};
+    use crate::implementation::cors_handler::{CorsHandler, CorsHandlerConfig};
 
     #[test]
     fn test_default_port_filtering() {
@@ -251,8 +248,5 @@ mod test {
     #[tokio::test]
     async fn test_cors_handler() {
         let mut cors_handler_config = CorsHandlerConfig::default();
-
     }
-
-
 }

@@ -1,29 +1,26 @@
-use crate::exchange::Exchange;
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
-use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
-use crate::executor::HandlerExecutionError;
-use crate::handlers::Handler;
-use crate::status::{HandlerStatus, HandlerStatusCode};
+use lambda_http::Context;
+use idem_handler::exchange::Exchange;
+use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
+use crate::implementation::Handler;
 
 #[derive(Clone, Default)]
 pub(crate) struct EchoTestLambdaMiddleware;
 
-impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, HashMap<String, String>>
+impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>
     for EchoTestLambdaMiddleware
 {
-    type Err = HandlerExecutionError;
-    type Status = HandlerStatus;
 
     fn process<'i1, 'i2, 'o>(
         &'i1 self,
         exchange: &'i2 mut Exchange<
             ApiGatewayProxyRequest,
             ApiGatewayProxyResponse,
-            HashMap<String, String>,
+            Context,
         >,
-    ) -> Pin<Box<dyn Future<Output = Result<Self::Status, Self::Err>> + Send + 'o>>
+    ) -> Pin<Box<dyn Future<Output = Result<HandlerStatus, HandlerExecutionError>> + Send + 'o>>
     where
         'i1: 'o,
         'i2: 'o,
@@ -37,7 +34,7 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, HashMap<String, St
                 ..Default::default()
             };
             exchange.save_output(response_payload);
-            Ok(HandlerStatus::from(HandlerStatusCode::Ok))
+            Ok(HandlerStatus::new(Code::OK))
         })
     }
 }

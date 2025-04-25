@@ -1,5 +1,4 @@
-use crate::exchange::Exchange;
-use crate::handlers::Handler;
+use crate::implementation::Handler;
 use aws_config::BehaviorVersion;
 use aws_sdk_lambda::primitives::Blob;
 use aws_sdk_lambda::Client as LambdaClient;
@@ -9,8 +8,8 @@ use lambda_http::Context;
 use serde::{Deserialize, Serialize};
 use std::future::Future;
 use std::pin::Pin;
-use crate::executor::HandlerExecutionError;
-use crate::status::{HandlerStatus, HandlerStatusCode};
+use idem_handler::exchange::Exchange;
+use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
 
 const HEALTH_STATUS: u32 = 200u32;
 const HEALTH_BODY: &str = "OK";
@@ -44,13 +43,11 @@ impl HealthCheckHandler {
 }
 
 impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for HealthCheckHandler {
-    type Err = HandlerExecutionError;
-    type Status = HandlerStatus;
 
     fn process<'i1, 'i2, 'o>(
         &'i1 self,
         exchange: &'i2 mut Exchange<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>,
-    ) -> Pin<Box<dyn Future<Output = Result<Self::Status, Self::Err>> + Send + 'o>>
+    ) -> Pin<Box<dyn Future<Output = Result<HandlerStatus, HandlerExecutionError>> + Send + 'o>>
     where
         'i1: 'o,
         'i2: 'o,
@@ -60,7 +57,7 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for Healt
         let client = self.lambda_client.clone();
         Box::pin(async move {
             if !self.config.enabled {
-                return Ok(HandlerStatus::from(HandlerStatusCode::Disabled))
+                return Ok(HandlerStatus::new(Code::DISABLED))
             }
             let mut response = ApiGatewayProxyResponse::default();
             let response_status: u32 = if self.config.downstream_enabled {
@@ -92,7 +89,7 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for Healt
                 response.body = Some(HEALTH_ERROR.into());
             }
             exchange.save_output(response);
-            Ok(HandlerStatus::from(HandlerStatusCode::Ok))
+            Ok(HandlerStatus::new(Code::OK))
         })
     }
 }

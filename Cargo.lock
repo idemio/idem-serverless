@@ -1271,11 +1271,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "idem-config"
+version = "0.1.0"
+
+[[package]]
+name = "idem-handler"
+version = "0.1.0"
+
+[[package]]
 name = "idem-serverless"
 version = "0.1.0"
 dependencies = [
  "aws-config",
  "aws-sdk-lambda",
+ "idem-config",
+ "idem-handler",
  "jsonwebtoken",
  "lambda_http",
  "log",

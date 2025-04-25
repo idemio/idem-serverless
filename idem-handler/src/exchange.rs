@@ -1,9 +1,5 @@
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
-use std::future::Future;
-use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not};
-use std::pin::Pin;
-use std::sync::Arc;
 
 pub struct Exchange<I, O, M>
 where
@@ -91,7 +87,6 @@ where
     pub fn consume_request(&mut self) -> Result<I, ()> {
         match self.execute_input_callbacks() {
             Ok(_) => {
-                log::debug!("Successfully executed request listeners.");
                 let consumed = std::mem::take(&mut self.input);
                 Ok(consumed)
             }
@@ -114,7 +109,6 @@ where
     pub fn consume_output(&mut self) -> Result<O, ()> {
         match self.execute_output_callbacks() {
             Ok(_) => {
-                log::debug!("Successfully executed response listeners.");
                 let consumed = std::mem::take(&mut self.output);
                 Ok(consumed)
             }
@@ -171,13 +165,6 @@ impl Attachments {
 /* I wanted to make this struct use TypeId::of::<>() but it's not stable. */
 #[derive(PartialOrd, PartialEq, Hash, Eq)]
 pub struct AttachmentKey(pub u32);
-
-impl AttachmentKey {
-    /* common attachment keys */
-    pub const APP_CONTEXT: AttachmentKey = AttachmentKey(1);
-    pub const CLIENT_SRC: AttachmentKey = AttachmentKey(2);
-    pub const CACHED_BODY: AttachmentKey = AttachmentKey(3);
-}
 
 pub struct Callback<P> {
     callback: Box<dyn FnMut(&mut P, &mut Attachments) + Send>,

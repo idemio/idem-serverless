@@ -1,12 +1,11 @@
-use crate::exchange::Exchange;
-use crate::handlers::Handler;
+use crate::implementation::Handler;
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use serde::{Deserialize, Serialize};
 use std::future::Future;
 use std::pin::Pin;
 use lambda_http::Context;
-use crate::executor::HandlerExecutionError;
-use crate::status::HandlerStatus;
+use idem_handler::status::{HandlerExecutionError, HandlerStatus};
+use crate::entry::LambdaExchange;
 
 #[derive(Deserialize, Serialize, Clone, Default)]
 pub(crate) struct SanitizerHandlerConfig {
@@ -34,13 +33,11 @@ pub(crate) struct SanitizerHandler {
 }
 
 impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for SanitizerHandlerConfig {
-    type Err = HandlerExecutionError;
-    type Status = HandlerStatus;
 
     fn process<'i1, 'i2, 'o>(
         &'i1 self,
-        exchange: &'i2 mut Exchange<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>,
-    ) -> Pin<Box<dyn Future<Output = Result<Self::Status, Self::Err>> + Send + 'o>>
+        exchange: &'i2 mut LambdaExchange,
+    ) -> Pin<Box<dyn Future<Output = Result<HandlerStatus, HandlerExecutionError>> + Send + 'o>>
     where
         'i1: 'o,
         'i2: 'o,

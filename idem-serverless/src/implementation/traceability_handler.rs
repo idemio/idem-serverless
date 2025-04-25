@@ -1,24 +1,24 @@
-use crate::exchange::{AttachmentKey, Exchange};
-use crate::handlers::Handler;
+use crate::implementation::Handler;
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::http::{HeaderMap, HeaderName, HeaderValue};
-use lambda_http::Context;
+use lambda_http::{tracing, Context};
 use log::log;
 use serde::{Deserialize, Serialize};
 use std::future::Future;
 use std::pin::Pin;
-use crate::executor::HandlerExecutionError;
-use crate::status::{HandlerStatus, HandlerStatusCode};
+use idem_handler::exchange::AttachmentKey;
+use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
+use crate::entry::LambdaExchange;
 
 #[derive(Serialize, Deserialize, Default, Clone)]
 pub(crate) struct TraceabilityHandlerConfig {
-    enabled: bool,
-    autogen_correlation_id: bool,
-    correlation_header_name: String,
-    traceability_header_name: String,
-    correlation_logging_field_name: String,
-    traceability_logging_field_name: String,
-    add_trace_to_response: bool,
+    pub enabled: bool,
+    pub autogen_correlation_id: bool,
+    pub correlation_header_name: String,
+    pub traceability_header_name: String,
+    pub correlation_logging_field_name: String,
+    pub traceability_logging_field_name: String,
+    pub add_trace_to_response: bool,
 }
 
 #[derive(Clone, Default)]
@@ -27,7 +27,6 @@ pub(crate) struct TraceabilityHandler {
 }
 
 impl TraceabilityHandler {
-
     pub(crate) async fn new(config: TraceabilityHandlerConfig) -> Self {
         Self { config }
     }
@@ -62,18 +61,17 @@ const CORR_H_ATTACHMENT_KEY: AttachmentKey = AttachmentKey(9);
 const TRACE_H_ATTACHMENT_KEY: AttachmentKey = AttachmentKey(10);
 
 impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for TraceabilityHandler {
-    type Err = HandlerExecutionError;
-    type Status = HandlerStatus;
 
     fn process<'i1, 'i2, 'o>(
         &'i1 self,
-        exchange: &'i2 mut Exchange<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>,
-    ) -> Pin<Box<dyn Future<Output = Result<Self::Status, Self::Err>> + Send + 'o>>
+        exchange: &'i2 mut LambdaExchange,
+    ) -> Pin<Box<dyn Future<Output = Result<HandlerStatus, HandlerExecutionError>> + Send + 'o>>
     where
         'i1: 'o,
         'i2: 'o,
         Self: 'o,
     {
+        tracing::debug!("Traceability handler starts");
         Box::pin(async move {
             let request = exchange.input().unwrap();
             let cid_header_name = self.config.correlation_header_name.clone();
@@ -83,14 +81,14 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for Trace
                 self.config.autogen_correlation_id,
             );
 
-            let tid_header_name = self.config.correlation_header_name.clone();
+            let tid_header_name = self.config.traceability_header_name.clone();
             let tid = Self::find_or_create_uuid(&request.headers, &tid_header_name, false);
 
             if cid.is_some() {
                 let cid = cid.unwrap();
                 if tid.is_some() {
                     let tid = tid.unwrap();
-                    log::info!(
+                    tracing::info!(
                         "Associate traceability Id {} with correlation Id {}",
                         &tid,
                         &cid
@@ -146,7 +144,39 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for Trace
                     .insert(inserted_header_name, inserted_header_value);
             }
 
-            Ok(HandlerStatus::from(HandlerStatusCode::Ok))
+            Ok(HandlerStatus::new(Code::OK))
         })
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::implementation::traceability_handler::TraceabilityHandler;
+    use lambda_http::http::{HeaderMap, HeaderName, HeaderValue};
+
+    #[test]
+    fn test_correlation_id() {
+        let mut header_map = HeaderMap::new();
+        header_map.insert(
+            HeaderName::from_bytes("x-correlation-id".as_bytes()).unwrap(),
+            HeaderValue::from_str("abc123").unwrap(),
+        );
+        let cid = TraceabilityHandler::find_or_create_uuid(&header_map, "x-correlation-id", true);
+        assert!(cid.is_some());
+        let cid = cid.unwrap();
+        assert_eq!(cid, "abc123".to_string());
+    }
+
+    #[test]
+    fn test_traceability_header() {
+        let mut header_map = HeaderMap::new();
+        header_map.insert(
+            HeaderName::from_bytes("x-traceability-id".as_bytes()).unwrap(),
+            HeaderValue::from_str("abc123").unwrap(),
+        );
+        let tid = TraceabilityHandler::find_or_create_uuid(&header_map, "x-traceability-id", false);
+        assert!(tid.is_some());
+        let tid = tid.unwrap();
+        assert_eq!(tid, "abc123".to_string());
     }
 }

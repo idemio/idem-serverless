@@ -1,13 +1,9 @@
-use std::env;
 use std::str::FromStr;
 use lambda_http::{lambda_runtime, service_fn, tracing, Error};
-mod executor;
-mod exchange;
-mod handlers;
-mod config;
-mod status;
+mod implementation;
+mod entry;
 
-use executor::entry;
+use entry::entry;
 
 fn main() -> Result<(), Error> {
     tokio::runtime::Builder::new_current_thread()

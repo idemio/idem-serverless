@@ -1,6 +1,5 @@
-use crate::config::config::{Config, ConfigResult};
-use crate::exchange::Exchange;
-use crate::handlers::Handler;
+use idem_config::config::{Config, ConfigResult};
+use crate::implementation::Handler;
 use aws_config::BehaviorVersion;
 use aws_sdk_lambda::primitives::Blob;
 use aws_sdk_lambda::Client as LambdaClient;
@@ -11,21 +10,21 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::ops::Add;
 use std::pin::Pin;
-use crate::executor::HandlerExecutionError;
-use crate::status::{HandlerStatus, HandlerStatusCode};
+use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
+use crate::entry::LambdaExchange;
 
 pub const FUNCTION_NAME_SEPARATOR: &str = "@";
 
 #[derive(Serialize, Deserialize, Default, Clone)]
 pub(crate) struct LambdaProxyHandlerConfig {
-    enabled: bool,
-    functions: HashMap<String, String>,
-    region: String,
-    endpoint_override: String,
-    api_call_timeout: u32,
-    log_type: String,
-    metrics_injection: bool,
-    metrics_name: String,
+    pub enabled: bool,
+    pub functions: HashMap<String, String>,
+    pub region: String,
+    pub endpoint_override: String,
+    pub api_call_timeout: u32,
+    pub log_type: String,
+    pub metrics_injection: bool,
+    pub metrics_name: String,
 }
 
 impl Config for LambdaProxyHandlerConfig {
@@ -49,7 +48,7 @@ pub(crate) struct LambdaProxyHandler {
 }
 
 impl LambdaProxyHandler {
-    pub(crate) async fn new(config: LambdaProxyHandlerConfig) -> Self {
+    pub async fn new(config: LambdaProxyHandlerConfig) -> Self {
         Self {
             lambda_client: Some(LambdaClient::new(
                 &aws_config::load_defaults(BehaviorVersion::latest()).await,
@@ -62,26 +61,22 @@ impl LambdaProxyHandler {
 impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>
     for LambdaProxyHandler
 {
-    type Err = HandlerExecutionError;
-    type Status = HandlerStatus;
 
     fn process<'i1, 'i2, 'o>(
         &'i1 self,
-        exchange: &'i2 mut Exchange<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>,
-    ) -> Pin<Box<dyn Future<Output = Result<Self::Status, Self::Err>> + Send + 'o>>
+        exchange: &'i2 mut LambdaExchange,
+    ) -> Pin<Box<dyn Future<Output = Result<HandlerStatus, HandlerExecutionError>> + Send + 'o>>
     where
         'i1: 'o,
         'i2: 'o,
         Self: 'o,
     {
+        println!("Proxy handler starts!");
         let client = self.lambda_client.clone();
         Box::pin(async move {
 
             if !self.config.enabled {
-                return Ok(HandlerStatus::from((
-                    HandlerStatusCode::Disabled,
-                    "LambdaProxyHandler is disabled."
-                )));
+                return Ok(HandlerStatus::new(Code::DISABLED));
             }
 
             match exchange.consume_request() {
@@ -117,12 +112,13 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>
                                     |_| todo!("failed to get response from lambda function call."),
                                 );
                             exchange.save_output(lambda_response);
-                            Ok(HandlerStatus::from(HandlerStatusCode::RequestCompleted))
+                            println!("LambdaProxyHandler successfully finished!");
+                            Ok(HandlerStatus::new(Code::REQUEST_COMPLETED))
                         }
-                        Err(_) => Ok(HandlerStatus::from(HandlerStatusCode::ServerError)),
+                        Err(_) => Ok(HandlerStatus::new(Code::SERVER_ERROR)),
                     }
                 }
-                Err(_) => Ok(HandlerStatus::from(HandlerStatusCode::ServerError)),
+                Err(_) => Ok(HandlerStatus::new(Code::SERVER_ERROR)),
             }
         })
     }

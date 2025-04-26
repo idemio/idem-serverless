@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
-#[derive(Serialize, Deserialize, Default, Clone)]
+#[derive(Deserialize, Default)]
 pub struct HealthCheckHandlerConfig {
     pub enabled: bool,
     pub use_json: bool,

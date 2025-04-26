@@ -1,9 +1,6 @@
-use std::fs::File;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize};
 
-const CONFIG_NAME: &str = "trace.json";
-
-#[derive(Serialize, Deserialize, Default, Clone)]
+#[derive(Deserialize)]
 pub struct TraceabilityHandlerConfig {
     pub enabled: bool,
     pub autogen_correlation_id: bool,
@@ -14,22 +11,15 @@ pub struct TraceabilityHandlerConfig {
     pub add_trace_to_response: bool,
 }
 
-impl TraceabilityHandlerConfig {
-    pub fn new(base_config_path: &str) -> Self {
-        let file = File::open(format!("{}{}{}", base_config_path, "/", CONFIG_NAME)).unwrap();
-        serde_json::from_reader(file).unwrap()
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use crate::implementation::traceability::config::TraceabilityHandlerConfig;
-
-    #[test]
-    fn test_load_config() {
-        let config = TraceabilityHandlerConfig::new("./test_resources/config");
-        assert_eq!(config.enabled, true);
-        assert_eq!(config.autogen_correlation_id, true);
-        assert_eq!(config.correlation_header_name, "x-correlation");
+impl Default for TraceabilityHandlerConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            autogen_correlation_id: true,
+            traceability_header_name: "x-trace".into(),
+            correlation_header_name: "x-correlation".into(),
+            add_trace_to_response: true,
+            ..Default::default()
+        }
     }
 }

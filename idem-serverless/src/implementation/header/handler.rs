@@ -1,25 +1,24 @@
-use std::collections::HashMap;
-use std::future::Future;
-use std::pin::Pin;
-use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
-use lambda_http::Context;
-use lambda_http::http::{HeaderMap, HeaderName, HeaderValue};
+use crate::implementation::header::config::{
+    HeaderHandlerConfig, ModifyHeaderKey, ModifyHeaderValue,
+};
+use idem_config::config::Config;
 use idem_handler::exchange::{AttachmentKey, Exchange};
 use idem_handler::handler::Handler;
 use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
-use crate::implementation::header::config::{HeaderHandlerConfig, ModifyHeaderKey, ModifyHeaderValue};
+use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
+use lambda_http::http::{HeaderMap, HeaderName, HeaderValue};
+use lambda_http::Context;
+use std::collections::HashMap;
+use std::future::Future;
+use std::pin::Pin;
 
-#[derive(Default, Clone)]
 pub(crate) struct HeaderHandler {
-    config: HeaderHandlerConfig,
+    config: Config<HeaderHandlerConfig>,
 }
 
 impl HeaderHandler {
-
-    pub(crate) async fn new(config: HeaderHandlerConfig) -> Self {
-        Self {
-            config,
-        }
+    pub fn new(config: Config<HeaderHandlerConfig>) -> Self {
+        Self { config }
     }
 
     fn remove_headers(headers: &mut HeaderMap, remove_headers: Vec<ModifyHeaderKey>) {
@@ -45,7 +44,6 @@ const REMOVE_RESPONSE_HEADER_ATTACHMENT_KEY: AttachmentKey = AttachmentKey(5);
 const UPDATE_RESPONSE_HEADER_ATTACHMENT_KEY: AttachmentKey = AttachmentKey(6);
 
 impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for HeaderHandler {
-
     fn process<'i1, 'i2, 'o>(
         &'i1 self,
         exchange: &'i2 mut Exchange<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>,
@@ -57,7 +55,7 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for Heade
     {
         println!("Header handler starts!");
         Box::pin(async move {
-            if !self.config.enabled {
+            if !self.config.get().enabled {
                 return Ok(HandlerStatus::new(Code::DISABLED));
             }
 
@@ -70,13 +68,14 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for Heade
             let mut response_update_headers = HashMap::new();
 
             // Gather rules for current path
-            request_remove_headers.extend(self.config.request.remove.clone());
-            request_update_headers.extend(self.config.request.update.clone());
-            response_remove_headers.extend(self.config.response.remove.clone());
-            response_update_headers.extend(self.config.response.update.clone());
+            request_remove_headers.extend(self.config.get().request.remove.clone());
+            request_update_headers.extend(self.config.get().request.update.clone());
+            response_remove_headers.extend(self.config.get().response.remove.clone());
+            response_update_headers.extend(self.config.get().response.update.clone());
 
             if let Some((_, path_config)) = self
                 .config
+                .get()
                 .path_prefix_header
                 .iter()
                 .find(|(path_prefix, _)| request_path.starts_with(&path_prefix.0))

@@ -9,18 +9,18 @@ use serde::{Deserialize, Serialize};
 use std::future::Future;
 use std::pin::Pin;
 use std::string::ToString;
+use idem_config::config::Config;
 use idem_handler::exchange::AttachmentKey;
 use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
 use crate::entry::LambdaExchange;
 use crate::implementation::traceability::config::TraceabilityHandlerConfig;
 
-#[derive(Clone, Default)]
-pub(crate) struct TraceabilityHandler {
-    config: TraceabilityHandlerConfig,
+pub struct TraceabilityHandler {
+    config: Config<TraceabilityHandlerConfig>,
 }
 
 impl TraceabilityHandler {
-    pub(crate) async fn new(config: TraceabilityHandlerConfig) -> Self {
+    pub fn new(config: Config<TraceabilityHandlerConfig>) -> Self {
         Self { config }
     }
 
@@ -67,14 +67,14 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for Trace
         tracing::debug!("Traceability handler starts");
         Box::pin(async move {
             let request = exchange.input().unwrap();
-            let cid_header_name = self.config.correlation_header_name.clone();
+            let cid_header_name = self.config.get().correlation_header_name.clone();
             let cid = Self::find_or_create_uuid(
                 &request.headers,
                 &cid_header_name,
-                self.config.autogen_correlation_id,
+                self.config.get().autogen_correlation_id,
             );
 
-            let tid_header_name = self.config.traceability_header_name.clone();
+            let tid_header_name = self.config.get().traceability_header_name.clone();
             let tid = Self::find_or_create_uuid(&request.headers, &tid_header_name, false);
 
             if cid.is_some() {
@@ -87,7 +87,7 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for Trace
                         &cid
                     );
 
-                    if self.config.add_trace_to_response {
+                    if self.config.get().add_trace_to_response {
                         exchange
                             .attachments_mut()
                             .add_attachment::<String>(TRACE_V_ATTACHMENT_KEY, Box::new(tid));

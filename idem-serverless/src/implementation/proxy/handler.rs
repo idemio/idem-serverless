@@ -1,40 +1,30 @@
+use crate::entry::LambdaExchange;
+use crate::implementation::proxy::config::LambdaProxyHandlerConfig;
 use crate::implementation::Handler;
 use aws_config::BehaviorVersion;
 use aws_sdk_lambda::primitives::Blob;
 use aws_sdk_lambda::Client as LambdaClient;
+use idem_config::config::Config;
+use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::Context;
 use std::future::Future;
 use std::ops::Add;
 use std::pin::Pin;
-use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
-use crate::entry::LambdaExchange;
-use crate::implementation::proxy::config::LambdaProxyHandlerConfig;
 
 pub const FUNCTION_NAME_SEPARATOR: &str = "@";
 
-
-#[derive(Clone, Default)]
-pub(crate) struct LambdaProxyHandler {
-    lambda_client: Option<LambdaClient>,
-    config: LambdaProxyHandlerConfig,
+pub struct LambdaProxyHandler {
+    config: Config<LambdaProxyHandlerConfig>,
 }
 
 impl LambdaProxyHandler {
-    pub async fn new(config: LambdaProxyHandlerConfig) -> Self {
-        Self {
-            lambda_client: Some(LambdaClient::new(
-                &aws_config::load_defaults(BehaviorVersion::latest()).await,
-            )),
-            config,
-        }
+    pub fn new(config: Config<LambdaProxyHandlerConfig>) -> Self {
+        Self { config }
     }
 }
 
-impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>
-    for LambdaProxyHandler
-{
-
+impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for LambdaProxyHandler {
     fn process<'i1, 'i2, 'o>(
         &'i1 self,
         exchange: &'i2 mut LambdaExchange,
@@ -44,11 +34,10 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>
         'i2: 'o,
         Self: 'o,
     {
-        println!("Proxy handler starts!");
-        let client = self.lambda_client.clone();
         Box::pin(async move {
-
-            if !self.config.enabled {
+            let client =
+                LambdaClient::new(&aws_config::load_defaults(BehaviorVersion::latest()).await);
+            if !self.config.get().enabled {
                 return Ok(HandlerStatus::new(Code::DISABLED));
             }
 
@@ -61,13 +50,12 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>
                     };
                     let method = request.http_method;
                     let function_key = path.add(FUNCTION_NAME_SEPARATOR).add(method.as_str());
-                    let function_name = match self.config.functions.get(&function_key) {
+                    let function_name = match self.config.get().functions.get(&function_key) {
                         None => todo!("Handle no function found matching in configuration"),
                         Some(function) => function.clone(),
                     };
                     let proxy_blob = Blob::new(payload);
                     match client
-                        .unwrap()
                         .invoke()
                         .function_name(&function_name)
                         .payload(proxy_blob)

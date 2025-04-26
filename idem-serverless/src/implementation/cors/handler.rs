@@ -19,8 +19,6 @@ const ACCESS_CONTROL_MAX_AGE: &str = "Access-Control-Max-Age";
 const ACCESS_CONTROL_ALLOW_METHODS: &str = "Access-Control-Allow-Methods";
 const ACCESS_CONTROL_ALLOW_HEADERS: &str = "Access-Control-Allow-Headers";
 
-
-
 #[derive(Default, Clone)]
 pub(crate) struct CorsHandler {
     config: CorsHandlerConfig,

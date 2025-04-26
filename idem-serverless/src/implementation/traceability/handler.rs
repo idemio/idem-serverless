@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+use std::convert::Into;
 use crate::implementation::Handler;
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::http::{HeaderMap, HeaderName, HeaderValue};
@@ -6,20 +8,11 @@ use log::log;
 use serde::{Deserialize, Serialize};
 use std::future::Future;
 use std::pin::Pin;
+use std::string::ToString;
 use idem_handler::exchange::AttachmentKey;
 use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
 use crate::entry::LambdaExchange;
-
-#[derive(Serialize, Deserialize, Default, Clone)]
-pub(crate) struct TraceabilityHandlerConfig {
-    pub enabled: bool,
-    pub autogen_correlation_id: bool,
-    pub correlation_header_name: String,
-    pub traceability_header_name: String,
-    pub correlation_logging_field_name: String,
-    pub traceability_logging_field_name: String,
-    pub add_trace_to_response: bool,
-}
+use crate::implementation::traceability::config::TraceabilityHandlerConfig;
 
 #[derive(Clone, Default)]
 pub(crate) struct TraceabilityHandler {
@@ -151,7 +144,7 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for Trace
 
 #[cfg(test)]
 mod test {
-    use crate::implementation::traceability_handler::TraceabilityHandler;
+    use crate::implementation::traceability::handler::TraceabilityHandler;
     use lambda_http::http::{HeaderMap, HeaderName, HeaderValue};
 
     #[test]

@@ -1,45 +1,18 @@
-use idem_config::config::{Config, ConfigResult};
 use crate::implementation::Handler;
 use aws_config::BehaviorVersion;
 use aws_sdk_lambda::primitives::Blob;
 use aws_sdk_lambda::Client as LambdaClient;
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::Context;
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::future::Future;
 use std::ops::Add;
 use std::pin::Pin;
 use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
 use crate::entry::LambdaExchange;
+use crate::implementation::proxy::config::LambdaProxyHandlerConfig;
 
 pub const FUNCTION_NAME_SEPARATOR: &str = "@";
 
-#[derive(Serialize, Deserialize, Default, Clone)]
-pub(crate) struct LambdaProxyHandlerConfig {
-    pub enabled: bool,
-    pub functions: HashMap<String, String>,
-    pub region: String,
-    pub endpoint_override: String,
-    pub api_call_timeout: u32,
-    pub log_type: String,
-    pub metrics_injection: bool,
-    pub metrics_name: String,
-}
-
-impl Config for LambdaProxyHandlerConfig {
-    fn load_local_file() -> ConfigResult<Self> {
-        todo!("impl load local")
-    }
-
-    fn load_programmatically() -> ConfigResult<Self> {
-        todo!("impl load programmatically")
-    }
-
-    fn load_remote() -> ConfigResult<Self> {
-        todo!("impl load remote")
-    }
-}
 
 #[derive(Clone, Default)]
 pub(crate) struct LambdaProxyHandler {

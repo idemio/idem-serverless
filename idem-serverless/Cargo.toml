@@ -3,12 +3,14 @@ name = "idem-serverless"
 version = "0.1.0"
 edition = "2021"
 
+[profile.release]
+opt-level = 3
+
 # Enable/disable implementation as needed to keep the binary slim for serverless deployments
 [features]
 jwt_validator_handler = ["dep:jsonwebtoken"]
 
 [dependencies]
-
 idem-handler = { path = "../idem-handler" }
 idem-config = { path = "../idem-config" }
 

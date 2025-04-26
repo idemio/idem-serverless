@@ -1,29 +1,19 @@
-use crate::implementation::Handler;
-use aws_config::BehaviorVersion;
-use aws_sdk_lambda::primitives::Blob;
-use aws_sdk_lambda::Client as LambdaClient;
-use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
-use lambda_http::http::header::CONTENT_TYPE;
-use lambda_http::Context;
-use serde::{Deserialize, Serialize};
 use std::future::Future;
 use std::pin::Pin;
+use crate::implementation::health::config::HealthCheckHandlerConfig;
+use aws_sdk_lambda::Client as LambdaClient;
+use aws_sdk_lambda::config::BehaviorVersion;
+use aws_sdk_lambda::primitives::Blob;
+use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
+use lambda_http::Context;
+use lambda_http::http::header::CONTENT_TYPE;
 use idem_handler::exchange::Exchange;
+use idem_handler::handler::Handler;
 use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
 
 const HEALTH_STATUS: u32 = 200u32;
 const HEALTH_BODY: &str = "OK";
 const HEALTH_ERROR: &str = "ERROR";
-
-#[derive(Serialize, Deserialize, Default, Clone)]
-pub struct HealthCheckHandlerConfig {
-    enabled: bool,
-    use_json: bool,
-    timeout: u32,
-    downstream_enabled: bool,
-    downstream_function: String,
-    downstream_function_health_payload: String,
-}
 
 #[derive(Clone, Default)]
 pub struct HealthCheckHandler {

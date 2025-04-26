@@ -3,12 +3,12 @@ use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayPr
 use lambda_http::http::HeaderValue;
 use lambda_http::Context;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use idem_handler::exchange::AttachmentKey;
 use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
 use crate::entry::LambdaExchange;
+use crate::implementation::cors::config::CorsHandlerConfig;
 
 const ORIGIN_HEADER_KEY: &str = "Origin";
 const ACCESS_CONTROL_REQUEST_METHOD: &str = "Access-Control-Request-Method";
@@ -19,19 +19,7 @@ const ACCESS_CONTROL_MAX_AGE: &str = "Access-Control-Max-Age";
 const ACCESS_CONTROL_ALLOW_METHODS: &str = "Access-Control-Allow-Methods";
 const ACCESS_CONTROL_ALLOW_HEADERS: &str = "Access-Control-Allow-Headers";
 
-#[derive(Deserialize, Serialize, Default, Clone)]
-pub struct CorsHandlerConfig {
-    pub enabled: bool,
-    pub allowed_origins: Vec<String>,
-    pub allowed_methods: Vec<String>,
-    pub path_prefix_cors_config: HashMap<String, CorsHandlerPathConfig>,
-}
 
-#[derive(Deserialize, Serialize, Default, Clone)]
-pub struct CorsHandlerPathConfig {
-    pub allowed_origins: Vec<String>,
-    pub allowed_methods: Vec<String>,
-}
 
 #[derive(Default, Clone)]
 pub(crate) struct CorsHandler {
@@ -164,7 +152,7 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for CorsH
                                 .join(",")
                                 .as_str(),
                         )
-                        .unwrap(),
+                            .unwrap(),
                     );
 
                     if let Some((_, ac_header_value)) =
@@ -227,7 +215,8 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for CorsH
 
 #[cfg(test)]
 mod test {
-    use crate::implementation::cors_handler::{CorsHandler, CorsHandlerConfig};
+    use crate::implementation::cors::config::CorsHandlerConfig;
+    use crate::implementation::cors::handler::CorsHandler;
 
     #[test]
     fn test_default_port_filtering() {

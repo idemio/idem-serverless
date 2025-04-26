@@ -1,44 +1,13 @@
-use crate::implementation::Handler;
-use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
-use lambda_http::http::{HeaderMap, HeaderName, HeaderValue};
-use lambda_http::Context;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
+use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
+use lambda_http::Context;
+use lambda_http::http::{HeaderMap, HeaderName, HeaderValue};
 use idem_handler::exchange::{AttachmentKey, Exchange};
+use idem_handler::handler::Handler;
 use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
-
-
-
-#[derive(Deserialize, Serialize, Default, Clone, PartialOrd, PartialEq, Hash, Eq)]
-pub(crate) struct ModifyHeaderKey(pub String);
-
-#[derive(Deserialize, Serialize, Default, Clone)]
-pub(crate) struct ModifyHeaderValue(pub String);
-
-#[derive(Deserialize, Serialize, Default, Clone, PartialOrd, PartialEq, Hash, Eq)]
-pub(crate) struct PathPrefix(pub String);
-
-#[derive(Deserialize, Serialize, Default, Clone)]
-pub(crate) struct HeaderHandlerConfig {
-    enabled: bool,
-    request: ModifyHeaderHandlerConfig,
-    response: ModifyHeaderHandlerConfig,
-    path_prefix_header: HashMap<PathPrefix, PathHeaderHandlerConfig>,
-}
-
-#[derive(Deserialize, Serialize, Default, Clone)]
-pub(crate) struct PathHeaderHandlerConfig {
-    request: ModifyHeaderHandlerConfig,
-    response: ModifyHeaderHandlerConfig,
-}
-
-#[derive(Deserialize, Serialize, Default, Clone)]
-pub(crate) struct ModifyHeaderHandlerConfig {
-    update: HashMap<ModifyHeaderKey, ModifyHeaderValue>,
-    remove: Vec<ModifyHeaderKey>,
-}
+use crate::implementation::header::config::{HeaderHandlerConfig, ModifyHeaderKey, ModifyHeaderValue};
 
 #[derive(Default, Clone)]
 pub(crate) struct HeaderHandler {

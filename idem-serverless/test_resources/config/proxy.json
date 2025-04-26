@@ -1,0 +1,6 @@
+{
+  "enabled": true,
+  "functions": {
+    "/path/to/resource@POST": "arn:aws:lambda:ca-central-1:173982495217:function:test-lambda-function-destination"
+  }
+}

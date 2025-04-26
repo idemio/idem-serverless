@@ -1,16 +1,16 @@
-use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use std::future::Future;
 use std::pin::Pin;
+use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::Context;
 use idem_handler::exchange::Exchange;
+use idem_handler::handler::Handler;
 use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
-use crate::implementation::Handler;
 
 #[derive(Clone, Default)]
 pub(crate) struct EchoTestLambdaMiddleware;
 
 impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>
-    for EchoTestLambdaMiddleware
+for EchoTestLambdaMiddleware
 {
 
     fn process<'i1, 'i2, 'o>(

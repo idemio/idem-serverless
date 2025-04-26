@@ -1,16 +1,19 @@
 use std::future::Future;
 use std::pin::Pin;
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
-use lambda_http::Context;
+use lambda_http::{Body, Context};
+use idem_config::config::Config;
 use idem_handler::exchange::Exchange;
 use idem_handler::handler::Handler;
 use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
+use crate::implementation::echo::config::EchoRequestHandlerConfig;
 
-#[derive(Clone, Default)]
-pub(crate) struct EchoTestLambdaMiddleware;
+pub struct EchoRequestHandler {
+    config: Config<EchoRequestHandlerConfig>
+}
 
 impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>
-for EchoTestLambdaMiddleware
+for EchoRequestHandler
 {
 
     fn process<'i1, 'i2, 'o>(
@@ -27,12 +30,35 @@ for EchoTestLambdaMiddleware
         Self: 'o,
     {
         Box::pin(async move {
+            if !self.config.get().enabled {
+                return Ok(HandlerStatus::new(Code::DISABLED))
+            }
+
             let request_payload = exchange.consume_request().unwrap();
-            let response_payload = ApiGatewayProxyResponse {
+            let echo_body: Option<Body> = if self.config.get().static_body.is_some() {
+                match self.config.get().static_body.as_ref() {
+                    Some(x) if !x.is_empty() => Some(Body::Text(x.clone())),
+                    Some(_) => None,
+                    None => None,
+                }
+            } else {
+                match request_payload.body {
+                    Some(body) => Some(Body::Text(body)),
+                    None => None
+                }
+            };
+
+            let mut response_payload = ApiGatewayProxyResponse {
                 status_code: 200,
-                body: Some(request_payload.body.unwrap_or_default().into()),
+                body: echo_body,
                 ..Default::default()
             };
+
+            if self.config.get().echo_headers {
+                let request_headers = request_payload.headers;
+                response_payload.headers.extend(request_headers);
+            }
+
             exchange.save_output(response_payload);
             Ok(HandlerStatus::new(Code::OK))
         })

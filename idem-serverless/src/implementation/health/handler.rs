@@ -1,39 +1,32 @@
-use std::future::Future;
-use std::pin::Pin;
 use crate::implementation::health::config::HealthCheckHandlerConfig;
-use aws_sdk_lambda::Client as LambdaClient;
 use aws_sdk_lambda::config::BehaviorVersion;
 use aws_sdk_lambda::primitives::Blob;
-use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
-use lambda_http::Context;
-use lambda_http::http::header::CONTENT_TYPE;
+use aws_sdk_lambda::Client as LambdaClient;
+use idem_config::config::Config;
 use idem_handler::exchange::Exchange;
 use idem_handler::handler::Handler;
 use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
+use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
+use lambda_http::http::header::CONTENT_TYPE;
+use lambda_http::Context;
+use std::future::Future;
+use std::pin::Pin;
 
 const HEALTH_STATUS: u32 = 200u32;
 const HEALTH_BODY: &str = "OK";
 const HEALTH_ERROR: &str = "ERROR";
 
-#[derive(Clone, Default)]
 pub struct HealthCheckHandler {
-    lambda_client: Option<LambdaClient>,
-    config: HealthCheckHandlerConfig,
+    config: Config<HealthCheckHandlerConfig>,
 }
 
 impl HealthCheckHandler {
-    pub(crate) async fn new(config: HealthCheckHandlerConfig) -> Self {
-        Self {
-            lambda_client: Some(LambdaClient::new(
-                &aws_config::load_defaults(BehaviorVersion::latest()).await,
-            )),
-            config,
-        }
+    fn new(config: Config<HealthCheckHandlerConfig>) -> Self {
+        Self { config }
     }
 }
 
 impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for HealthCheckHandler {
-
     fn process<'i1, 'i2, 'o>(
         &'i1 self,
         exchange: &'i2 mut Exchange<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>,
@@ -44,17 +37,19 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for Healt
         Self: 'o,
     {
         /* maybe we can grab this from a central location instead of the struct itself? cache? */
-        let client = self.lambda_client.clone();
+
         Box::pin(async move {
-            if !self.config.enabled {
-                return Ok(HandlerStatus::new(Code::DISABLED))
+            let client =
+                LambdaClient::new(&aws_config::load_defaults(BehaviorVersion::latest()).await);
+            if !self.config.get().enabled {
+                return Ok(HandlerStatus::new(Code::DISABLED));
             }
             let mut response = ApiGatewayProxyResponse::default();
-            let response_status: u32 = if self.config.downstream_enabled {
-                let payload = Blob::new(self.config.downstream_function_health_payload.clone());
-                let function_name = self.config.downstream_function.clone();
+            let response_status: u32 = if self.config.get().downstream_enabled {
+                let payload =
+                    Blob::new(self.config.get().downstream_function_health_payload.clone());
+                let function_name = self.config.get().downstream_function.clone();
                 match client
-                    .unwrap()
                     .invoke()
                     .function_name(&function_name)
                     .payload(payload)

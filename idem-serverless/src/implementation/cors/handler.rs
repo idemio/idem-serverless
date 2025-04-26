@@ -5,6 +5,7 @@ use lambda_http::Context;
 use serde::{Deserialize, Serialize};
 use std::future::Future;
 use std::pin::Pin;
+use idem_config::config::Config;
 use idem_handler::exchange::AttachmentKey;
 use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
 use crate::entry::LambdaExchange;
@@ -19,13 +20,13 @@ const ACCESS_CONTROL_MAX_AGE: &str = "Access-Control-Max-Age";
 const ACCESS_CONTROL_ALLOW_METHODS: &str = "Access-Control-Allow-Methods";
 const ACCESS_CONTROL_ALLOW_HEADERS: &str = "Access-Control-Allow-Headers";
 
-#[derive(Default, Clone)]
+#[derive(Default)]
 pub(crate) struct CorsHandler {
-    config: CorsHandlerConfig,
+    config: Config<CorsHandlerConfig>,
 }
 
 impl CorsHandler {
-    pub(crate) async fn new(config: CorsHandlerConfig) -> Self {
+    fn new(config: Config<CorsHandlerConfig>) -> Self {
         Self { config }
     }
 }
@@ -83,7 +84,7 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for CorsH
         Self: 'o,
     {
         Box::pin(async move {
-            if !self.config.enabled {
+            if !self.config.get().enabled {
                 return Ok(HandlerStatus::new(Code::DISABLED));
             }
 
@@ -98,14 +99,15 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for CorsH
                     Self::remove_default_ports(origin_header.1.to_str().unwrap());
                 found_origin_header = Some(origin_header_value.to_string());
 
-                let mut exchange_allowed_origins = self.config.allowed_origins.clone();
-                let mut exchange_allowed_methods = self.config.allowed_methods.clone();
+                let mut exchange_allowed_origins = self.config.get().allowed_origins.clone();
+                let mut exchange_allowed_methods = self.config.get().allowed_methods.clone();
 
                 /* check path specific configuration */
-                if !self.config.path_prefix_cors_config.is_empty() {
+                if !self.config.get().path_prefix_cors_config.is_empty() {
                     let request_path = request.path.clone().unwrap_or("/".to_string());
                     let path_config = self
                         .config
+                        .get()
                         .path_prefix_cors_config
                         .iter()
                         .find(|(k, _)| request_path.starts_with(k.as_str()))

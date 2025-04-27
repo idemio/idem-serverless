@@ -4,6 +4,7 @@ pub mod header;
 pub mod health;
 pub mod proxy;
 pub mod traceability;
+mod jwt;
 
 use idem_handler::exchange::Exchange;
 use idem_handler::handler::Handler;

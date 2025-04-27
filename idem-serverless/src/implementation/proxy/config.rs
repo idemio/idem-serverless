@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 use serde::{Deserialize};
 
-const CONFIG_FILE: &str = "proxy-lambda.json";
-
 #[derive(Deserialize, Default)]
 pub(crate) struct LambdaProxyHandlerConfig {
     pub enabled: bool,

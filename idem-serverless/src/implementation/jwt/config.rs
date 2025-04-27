@@ -1,9 +1,23 @@
 use serde::Deserialize;
+use crate::implementation::jwt::jwk_provider::JwkProviders;
 
-#[derive(Deserialize, Default)]
+#[derive(Deserialize)]
 pub struct JwtValidationHandlerConfig {
-    enabled: bool,
-    jwk_server_url: String,
-    jwk_server_path: String,
-    audience: String,
+    pub enabled: bool,
+    pub jwk_provider: JwkProviders,
+    pub audience: String,
+
 }
+
+impl Default for JwtValidationHandlerConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            jwk_provider: JwkProviders::default(),
+            audience: "https://issuer.example.com".to_string(),
+        }
+    }
+}
+
+
+

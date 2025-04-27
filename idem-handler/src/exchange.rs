@@ -59,14 +59,14 @@ where
     }
 
     fn execute_input_callbacks(&mut self) -> Result<(), ()> {
-        self.input_listeners.iter_mut().for_each(|mut listener| {
+        self.input_listeners.iter_mut().for_each(|listener| {
             listener.invoke(&mut self.input, &mut self.attachments);
         });
         Ok(())
     }
 
     fn execute_output_callbacks(&mut self) -> Result<(), ()> {
-        self.output_listeners.iter_mut().for_each(|mut listener| {
+        self.output_listeners.iter_mut().for_each(|listener| {
             listener.invoke(&mut self.output, &mut self.attachments);
         });
         Ok(())

@@ -19,7 +19,8 @@ impl Default for TraceabilityHandlerConfig {
             traceability_header_name: "x-trace".into(),
             correlation_header_name: "x-correlation".into(),
             add_trace_to_response: true,
-            ..Default::default()
+            correlation_logging_field_name: "correlation".into(),
+            traceability_logging_field_name: "trace".into(),
         }
     }
 }

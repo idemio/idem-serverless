@@ -1,29 +1,17 @@
-use std::future::Future;
-use std::pin::Pin;
+use crate::implementation::echo::config::EchoRequestHandlerConfig;
+use crate::implementation::{HandlerOutput, LambdaExchange};
+use idem_config::config::Config;
+use idem_handler::handler::Handler;
+use idem_handler::status::{Code, HandlerStatus};
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::{Body, Context};
-use idem_config::config::Config;
-use idem_handler::exchange::Exchange;
-use idem_handler::handler::Handler;
-use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
-use crate::implementation::echo::config::EchoRequestHandlerConfig;
 
 pub struct EchoRequestHandler {
-    config: Config<EchoRequestHandlerConfig>
+    config: Config<EchoRequestHandlerConfig>,
 }
 
-impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>
-for EchoRequestHandler
-{
-
-    fn process<'i1, 'i2, 'o>(
-        &'i1 self,
-        exchange: &'i2 mut Exchange<
-            ApiGatewayProxyRequest,
-            ApiGatewayProxyResponse,
-            Context,
-        >,
-    ) -> Pin<Box<dyn Future<Output = Result<HandlerStatus, HandlerExecutionError>> + Send + 'o>>
+impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for EchoRequestHandler {
+    fn process<'i1, 'i2, 'o>(&'i1 self, exchange: &'i2 mut LambdaExchange) -> HandlerOutput<'o>
     where
         'i1: 'o,
         'i2: 'o,
@@ -31,7 +19,7 @@ for EchoRequestHandler
     {
         Box::pin(async move {
             if !self.config.get().enabled {
-                return Ok(HandlerStatus::new(Code::DISABLED))
+                return Ok(HandlerStatus::new(Code::DISABLED));
             }
 
             let request_payload = exchange.consume_request().unwrap();
@@ -44,7 +32,7 @@ for EchoRequestHandler
             } else {
                 match request_payload.body {
                     Some(body) => Some(Body::Text(body)),
-                    None => None
+                    None => None,
                 }
             };
 

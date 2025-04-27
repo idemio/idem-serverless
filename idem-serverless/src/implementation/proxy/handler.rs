@@ -1,16 +1,14 @@
 use crate::entry::LambdaExchange;
 use crate::implementation::proxy::config::LambdaProxyHandlerConfig;
-use crate::implementation::Handler;
+use crate::implementation::{Handler, HandlerOutput};
 use aws_config::BehaviorVersion;
 use aws_sdk_lambda::primitives::Blob;
 use aws_sdk_lambda::Client as LambdaClient;
 use idem_config::config::Config;
-use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
+use idem_handler::status::{Code, HandlerStatus};
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::Context;
-use std::future::Future;
 use std::ops::Add;
-use std::pin::Pin;
 
 pub const FUNCTION_NAME_SEPARATOR: &str = "@";
 
@@ -25,10 +23,7 @@ impl LambdaProxyHandler {
 }
 
 impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for LambdaProxyHandler {
-    fn process<'i1, 'i2, 'o>(
-        &'i1 self,
-        exchange: &'i2 mut LambdaExchange,
-    ) -> Pin<Box<dyn Future<Output = Result<HandlerStatus, HandlerExecutionError>> + Send + 'o>>
+    fn process<'i1, 'i2, 'o>(&'i1 self, exchange: &'i2 mut LambdaExchange) -> HandlerOutput<'o>
     where
         'i1: 'o,
         'i2: 'o,

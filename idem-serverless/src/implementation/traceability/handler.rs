@@ -1,19 +1,12 @@
-use std::borrow::Cow;
-use std::convert::Into;
-use crate::implementation::Handler;
+use crate::entry::LambdaExchange;
+use crate::implementation::traceability::config::TraceabilityHandlerConfig;
+use crate::implementation::{Handler, HandlerOutput};
+use idem_config::config::Config;
+use idem_handler::exchange::AttachmentKey;
+use idem_handler::status::{Code, HandlerStatus};
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::http::{HeaderMap, HeaderName, HeaderValue};
 use lambda_http::{tracing, Context};
-use log::log;
-use serde::{Deserialize, Serialize};
-use std::future::Future;
-use std::pin::Pin;
-use std::string::ToString;
-use idem_config::config::Config;
-use idem_handler::exchange::AttachmentKey;
-use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
-use crate::entry::LambdaExchange;
-use crate::implementation::traceability::config::TraceabilityHandlerConfig;
 
 pub struct TraceabilityHandler {
     config: Config<TraceabilityHandlerConfig>,
@@ -54,11 +47,7 @@ const CORR_H_ATTACHMENT_KEY: AttachmentKey = AttachmentKey(9);
 const TRACE_H_ATTACHMENT_KEY: AttachmentKey = AttachmentKey(10);
 
 impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for TraceabilityHandler {
-
-    fn process<'i1, 'i2, 'o>(
-        &'i1 self,
-        exchange: &'i2 mut LambdaExchange,
-    ) -> Pin<Box<dyn Future<Output = Result<HandlerStatus, HandlerExecutionError>> + Send + 'o>>
+    fn process<'i1, 'i2, 'o>(&'i1 self, exchange: &'i2 mut LambdaExchange) -> HandlerOutput<'o>
     where
         'i1: 'o,
         'i2: 'o,

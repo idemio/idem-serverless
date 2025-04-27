@@ -9,7 +9,6 @@ use idem_handler::handler::Handler;
 use idem_handler::status::Code;
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::{Context, Error, LambdaEvent};
-use std::fmt::Display;
 
 pub type LambdaExchange = Exchange<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>;
 

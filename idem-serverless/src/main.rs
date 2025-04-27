@@ -1,4 +1,3 @@
-use std::str::FromStr;
 use lambda_http::{lambda_runtime, service_fn, tracing, Error};
 mod implementation;
 mod entry;

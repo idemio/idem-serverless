@@ -23,6 +23,9 @@ impl HandlerStatus {
     pub fn code(&self) -> Code {
         self.code
     }
+    pub fn message(&self) -> &'static str {
+        self.message.unwrap_or_else(|| "")
+    }
 
     pub fn new(code: Code) -> HandlerStatus {
         Self {code, message: None, description: None}

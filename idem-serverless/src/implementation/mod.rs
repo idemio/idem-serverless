@@ -11,17 +11,18 @@ use idem_handler::handler::Handler;
 use idem_handler::status::{HandlerExecutionError, HandlerStatus};
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::Context;
-use std::fmt::{Debug, Display};
 use std::future::Future;
 use std::pin::Pin;
-use std::str::FromStr;
-use std::string::ToString;
 
 use crate::implementation::{
     cors::handler::CorsHandler, header::handler::HeaderHandler,
     health::handler::HealthCheckHandler, proxy::handler::LambdaProxyHandler,
     traceability::handler::TraceabilityHandler,
 };
+
+pub type LambdaExchange = Exchange<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>;
+pub type HandlerOutput<'a> =
+Pin<Box<dyn Future<Output = Result<HandlerStatus, HandlerExecutionError>> + Send + 'a>>;
 
 pub enum LambdaHandlers {
     ProxyHandler(LambdaProxyHandler),
@@ -36,8 +37,8 @@ pub enum LambdaHandlers {
 impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for LambdaHandlers {
     fn process<'i1, 'i2, 'o>(
         &'i1 self,
-        exchange: &'i2 mut Exchange<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>,
-    ) -> Pin<Box<dyn Future<Output = Result<HandlerStatus, HandlerExecutionError>> + Send + 'o>>
+        exchange: &'i2 mut LambdaExchange,
+    ) -> HandlerOutput<'o>
     where
         'i1: 'o,
         'i2: 'o,

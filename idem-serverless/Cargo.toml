@@ -21,3 +21,4 @@ base64 = { version = "0.22", features = ["alloc"] }
 uuid = { version = "1.16.0", features = ["v4"] }
 jsonwebtoken = { version = "9.3.1" }
 rsa = { version = "0.9.8" , features = ["pem", "pkcs5"]  }
+tracing = "0.1.41"

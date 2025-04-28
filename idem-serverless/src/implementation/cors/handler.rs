@@ -1,15 +1,12 @@
-use crate::implementation::Handler;
+use crate::entry::LambdaExchange;
+use crate::implementation::cors::config::CorsHandlerConfig;
+use crate::implementation::{Handler, HandlerOutput};
+use idem_config::config::Config;
+use idem_handler::exchange::AttachmentKey;
+use idem_handler::status::{Code, HandlerStatus};
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::http::HeaderValue;
 use lambda_http::Context;
-use serde::{Deserialize, Serialize};
-use std::future::Future;
-use std::pin::Pin;
-use idem_config::config::Config;
-use idem_handler::exchange::AttachmentKey;
-use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
-use crate::entry::LambdaExchange;
-use crate::implementation::cors::config::CorsHandlerConfig;
 
 const ORIGIN_HEADER_KEY: &str = "Origin";
 const ACCESS_CONTROL_REQUEST_METHOD: &str = "Access-Control-Request-Method";
@@ -20,13 +17,12 @@ const ACCESS_CONTROL_MAX_AGE: &str = "Access-Control-Max-Age";
 const ACCESS_CONTROL_ALLOW_METHODS: &str = "Access-Control-Allow-Methods";
 const ACCESS_CONTROL_ALLOW_HEADERS: &str = "Access-Control-Allow-Headers";
 
-#[derive(Default)]
-pub(crate) struct CorsHandler {
+pub struct CorsHandler {
     config: Config<CorsHandlerConfig>,
 }
 
 impl CorsHandler {
-    fn new(config: Config<CorsHandlerConfig>) -> Self {
+    pub fn new(config: Config<CorsHandlerConfig>) -> Self {
         Self { config }
     }
 }
@@ -73,11 +69,7 @@ impl CorsHandler {
 const ORIGIN_ATTACHMENT_KEY: AttachmentKey = AttachmentKey(4);
 
 impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for CorsHandler {
-
-    fn process<'i1, 'i2, 'o>(
-        &'i1 self,
-        exchange: &'i2 mut LambdaExchange,
-    ) -> Pin<Box<dyn Future<Output = Result<HandlerStatus, HandlerExecutionError>> + Send + 'o>>
+    fn process<'i1, 'i2, 'o>(&'i1 self, exchange: &'i2 mut LambdaExchange) -> HandlerOutput<'o>
     where
         'i1: 'o,
         'i2: 'o,
@@ -93,7 +85,7 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for CorsH
             if let Some(origin_header) = request
                 .headers
                 .iter()
-                .find(|(k, v)| k.to_string().to_lowercase() == ORIGIN_HEADER_KEY.to_lowercase())
+                .find(|(k, _)| k.to_string().to_lowercase() == ORIGIN_HEADER_KEY.to_lowercase())
             {
                 let origin_header_value =
                     Self::remove_default_ports(origin_header.1.to_str().unwrap());
@@ -152,7 +144,7 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for CorsH
                                 .join(",")
                                 .as_str(),
                         )
-                            .unwrap(),
+                        .unwrap(),
                     );
 
                     if let Some((_, ac_header_value)) =
@@ -215,7 +207,6 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for CorsH
 
 #[cfg(test)]
 mod test {
-    use crate::implementation::cors::config::CorsHandlerConfig;
     use crate::implementation::cors::handler::CorsHandler;
 
     #[test]
@@ -233,9 +224,9 @@ mod test {
         assert_eq!(sanitized_url, "http://[2001:db8:4006:812::200e]");
     }
 
-    // TODO - test cors functionality using tokio test: https://tokio.rs/tokio/topics/testing
-    #[tokio::test]
-    async fn test_cors_handler() {
-        let mut cors_handler_config = CorsHandlerConfig::default();
-    }
+//    // TODO - test cors functionality using tokio test: https://tokio.rs/tokio/topics/testing
+//    #[tokio::test]
+//    async fn test_cors_handler() {
+//        let mut cors_handler_config = CorsHandlerConfig::default();
+//    }
 }

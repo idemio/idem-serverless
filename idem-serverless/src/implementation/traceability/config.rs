@@ -6,8 +6,6 @@ pub struct TraceabilityHandlerConfig {
     pub autogen_correlation_id: bool,
     pub correlation_header_name: String,
     pub traceability_header_name: String,
-    pub correlation_logging_field_name: String,
-    pub traceability_logging_field_name: String,
     pub add_trace_to_response: bool,
 }
 
@@ -18,8 +16,7 @@ impl Default for TraceabilityHandlerConfig {
             autogen_correlation_id: true,
             traceability_header_name: "x-trace".into(),
             correlation_header_name: "x-correlation".into(),
-            add_trace_to_response: true,
-            ..Default::default()
+            add_trace_to_response: true
         }
     }
 }

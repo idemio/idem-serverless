@@ -1,16 +1,15 @@
 use crate::implementation::header::config::{
     HeaderHandlerConfig, ModifyHeaderKey, ModifyHeaderValue,
 };
+use crate::implementation::{HandlerOutput, LambdaExchange};
 use idem_config::config::Config;
-use idem_handler::exchange::{AttachmentKey, Exchange};
+use idem_handler::exchange::AttachmentKey;
 use idem_handler::handler::Handler;
-use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
+use idem_handler::status::{Code, HandlerStatus};
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::http::{HeaderMap, HeaderName, HeaderValue};
 use lambda_http::Context;
 use std::collections::HashMap;
-use std::future::Future;
-use std::pin::Pin;
 
 pub(crate) struct HeaderHandler {
     config: Config<HeaderHandlerConfig>,
@@ -44,10 +43,7 @@ const REMOVE_RESPONSE_HEADER_ATTACHMENT_KEY: AttachmentKey = AttachmentKey(5);
 const UPDATE_RESPONSE_HEADER_ATTACHMENT_KEY: AttachmentKey = AttachmentKey(6);
 
 impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for HeaderHandler {
-    fn process<'i1, 'i2, 'o>(
-        &'i1 self,
-        exchange: &'i2 mut Exchange<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>,
-    ) -> Pin<Box<dyn Future<Output = Result<HandlerStatus, HandlerExecutionError>> + Send + 'o>>
+    fn process<'i1, 'i2, 'o>(&'i1 self, exchange: &'i2 mut LambdaExchange) -> HandlerOutput<'o>
     where
         'i1: 'o,
         'i2: 'o,

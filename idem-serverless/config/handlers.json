@@ -1,0 +1,30 @@
+{
+  "handlers": [
+    "TraceabilityHandler",
+    "JwtValidationHandler",
+    "ProxyHandler",
+    "HealthCheckHandler"
+  ],
+  "chains": {
+    "default": [
+      "TraceabilityHandler",
+      "JwtValidationHandler"
+    ]
+  },
+  "paths": {
+    "/path/to/resource": {
+      "method": "POST",
+      "exec": [
+        "default",
+        "ProxyHandler"
+      ]
+    },
+    "/health": {
+      "method": "GET",
+      "exec": [
+        "default",
+        "HealthCheckHandler"
+      ]
+    }
+  }
+}

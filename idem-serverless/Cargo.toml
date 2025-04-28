@@ -6,10 +6,6 @@ edition = "2021"
 [profile.release]
 opt-level = 3
 
-# Enable/disable implementation as needed to keep the binary slim for serverless deployments
-[features]
-jwt_validator_handler = ["dep:jsonwebtoken"]
-
 [dependencies]
 idem-handler = { path = "../idem-handler" }
 idem-config = { path = "../idem-config" }
@@ -21,6 +17,8 @@ serde_json = "1.0.140"
 serde = { version = "1.0.219", features = ["derive"] }
 tokio = { version = "1.44.1", features = ["macros"] }
 log = "0.4.27"
-
+base64 = { version = "0.22", features = ["alloc"] }
 uuid = { version = "1.16.0", features = ["v4"] }
-jsonwebtoken = { version = "9.3.1", optional = true }
+jsonwebtoken = { version = "9.3.1" }
+rsa = { version = "0.9.8" , features = ["pem", "pkcs5"]  }
+tracing = "0.1.41"

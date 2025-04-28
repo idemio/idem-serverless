@@ -46,8 +46,8 @@ where
 }
 
 pub struct FileConfigProvider {
-    base_path: String,
-    config_name: String
+    pub base_path: String,
+    pub config_name: String
 }
 
 impl<C> ConfigProvider<C> for FileConfigProvider
@@ -64,4 +64,9 @@ where
             Err(_) => todo!("handle malformed config data from file...")
         }
     }
+}
+
+pub enum ProviderType {
+    File,
+    Default
 }

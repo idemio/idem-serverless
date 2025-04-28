@@ -55,6 +55,11 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for Trace
     {
         tracing::debug!("Traceability handler starts");
         Box::pin(async move {
+
+            if !self.config.get().enabled {
+                return Ok(HandlerStatus::new(Code::DISABLED));
+            }
+
             let request = exchange.input().unwrap();
             let cid_header_name = self.config.get().correlation_header_name.clone();
             let cid = Self::find_or_create_uuid(

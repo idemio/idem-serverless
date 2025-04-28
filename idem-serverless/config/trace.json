@@ -3,7 +3,5 @@
   "autogen_correlation_id": true,
   "traceability_header_name": "x-trace",
   "correlation_header_name": "x-correlation",
-  "add_trace_to_response": true,
-  "correlation_logging_field_name": "correlation",
-  "traceability_logging_field_name": "trace"
+  "add_trace_to_response": true
 }

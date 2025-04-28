@@ -22,7 +22,7 @@ pub struct CorsHandler {
 }
 
 impl CorsHandler {
-    fn new(config: Config<CorsHandlerConfig>) -> Self {
+    pub fn new(config: Config<CorsHandlerConfig>) -> Self {
         Self { config }
     }
 }

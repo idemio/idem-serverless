@@ -1,0 +1,10 @@
+{
+  "enabled": true,
+  "jwk_provider": {
+    "LocalJwkProvider": {
+      "file_name": "jwks.json",
+      "file_path": "/opt/config"
+    }
+  },
+  "audience": "https://issuer.example.com"
+}

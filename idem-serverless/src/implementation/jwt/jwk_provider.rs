@@ -26,6 +26,7 @@ impl JwkProvider for LocalJwkProvider {
     }
 }
 
+#[derive(Deserialize, Default)]
 pub struct RemoteJwkProvider {
     jwk_server_url: String,
     jwk_server_path: String

@@ -2,7 +2,7 @@ use crate::entry::LambdaExchange;
 use crate::implementation::jwt::config::JwtValidationHandlerConfig;
 use crate::implementation::jwt::jwk_provider::JwkProvider;
 use crate::implementation::HandlerOutput;
-use idem_config::config::Config;
+use idem_config::config::{Config, ConfigProvider};
 use idem_handler::handler::Handler;
 use idem_handler::status::{Code, HandlerStatus};
 use jsonwebtoken::jwk::{AlgorithmParameters, JwkSet};
@@ -174,6 +174,13 @@ mod test {
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
         encode(&header, &claims, &encoding_key).unwrap()
+    }
+
+    #[test]
+    fn create_jwt_test() {
+        let token = get_test_key_gen();
+        println!("{}", token);
+        assert!(true)
     }
 
     #[tokio::test(flavor = "current_thread")]

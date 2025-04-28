@@ -19,7 +19,7 @@ pub struct HealthCheckHandler {
 }
 
 impl HealthCheckHandler {
-    fn new(config: Config<HealthCheckHandlerConfig>) -> Self {
+    pub(crate) fn new(config: Config<HealthCheckHandlerConfig>) -> Self {
         Self { config }
     }
 }

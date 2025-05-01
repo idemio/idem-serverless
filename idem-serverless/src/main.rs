@@ -3,8 +3,12 @@ mod implementation;
 mod entry;
 
 use entry::entry;
+use idem_config::config_cache::{init_or_replace_config};
 
 fn main() -> Result<(), Error> {
+    init_or_replace_config("/opt/config/handlers.json").unwrap();
+
+
     tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()

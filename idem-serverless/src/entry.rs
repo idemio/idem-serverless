@@ -6,14 +6,17 @@ use idem_handler::handler::Handler;
 use idem_handler::status::Code;
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::{Context, Error, LambdaEvent};
+use idem_config::config_cache::get_config_file;
 use idem_config::execution_flow_config::ExecutionFlowConfig;
+use idem_handler::factory::HandlerFactory;
 
 pub async fn entry(
     event: LambdaEvent<ApiGatewayProxyRequest>,
 ) -> Result<ApiGatewayProxyResponse, Error> {
+
     // Load the execution flow configuration
-    let config_file = File::open("/opt/config/handlers.json").unwrap();
-    let execution_flow_config: ExecutionFlowConfig = serde_json::from_reader(config_file).unwrap();
+    let config_file = get_config_file("/opt/config/handlers.json").unwrap();
+    let execution_flow_config: ExecutionFlowConfig = serde_json::from_reader(&config_file).unwrap();
     let (payload, context) = event.into_parts();
 
     let path = match &payload.path {
@@ -51,7 +54,7 @@ pub async fn entry(
 
             // Execute handlers
             'handler_exec: for handler in executor.handlers {
-                match handler.process(&mut exchange).await {
+                match handler.exec(&mut exchange).await {
                     Ok(status) => {
                         if status
                             .code()
@@ -85,58 +88,3 @@ pub async fn entry(
 
 
 pub type LambdaExchange = Exchange<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>;
-
-//pub async fn entry(
-//    event: LambdaEvent<ApiGatewayProxyRequest>,
-//) -> Result<ApiGatewayProxyResponse, Error> {
-//
-//
-//    let config_file = File::open("./config/handlers.json").unwrap();
-//    let execution_flow_config: ExecutionFlowConfig = serde_json::from_reader(config_file).unwrap();
-//
-//
-//    let mut handlers: Vec<LambdaHandler> = vec![];
-//
-//    let traceability_config: Config<TraceabilityHandlerConfig> =
-//        Config::new(DefaultConfigProvider).unwrap();
-//    handlers.push(LambdaHandler::TraceabilityHandler(
-//        TraceabilityHandler::new(traceability_config),
-//    ));
-//
-//    let proxy_config: Config<LambdaProxyHandlerConfig> =
-//        Config::new(DefaultConfigProvider).unwrap();
-//    handlers.push(LambdaHandler::ProxyHandler(LambdaProxyHandler::new(
-//        proxy_config,
-//    )));
-//
-//    let executor = LambdaHandlerExecutor::new(handlers);
-//    let (payload, context) = event.into_parts();
-//
-//    let mut exchange: LambdaExchange = Exchange::new();
-//    exchange.save_input(payload);
-//    exchange.add_metadata(context);
-//
-//    'handler_exec: for handler in &executor.handlers {
-//        match handler.process(&mut exchange).await {
-//            Ok(status) => {
-//                if status
-//                    .code()
-//                    .any_flags(Code::TIMEOUT | Code::SERVER_ERROR | Code::CLIENT_ERROR)
-//                {
-//                    todo!("Handle exception here")
-//                } else if status.code().any_flags(Code::CONTINUE) {
-//                    todo!("Handle continue flow here")
-//                } else if status.code().any_flags(Code::OK | Code::DISABLED) {
-//                    continue;
-//                } else if status.code().all_flags(Code::REQUEST_COMPLETED) {
-//                    break 'handler_exec;
-//                }
-//            }
-//            Err(_err) => {
-//                todo!("Return with exception handler")
-//            }
-//        }
-//    }
-//
-//    Ok(exchange.consume_output().unwrap())
-//}

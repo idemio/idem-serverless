@@ -17,20 +17,6 @@ pub struct PrefixConfig {
     pub exec: Vec<String>
 }
 
-//impl ExecutionFlowConfig {
-//    pub fn handlers(&self) -> &Vec<String> {
-//        &self.handlers
-//    }
-//
-//    pub fn chains(&self) -> &HashMap<String, Vec<String>> {
-//        &self.chains
-//    }
-//
-//    pub fn paths(&self) -> &HashMap<String, PrefixConfig> {
-//        &self.paths
-//    }
-//}
-
 
 #[cfg(test)]
 mod test {

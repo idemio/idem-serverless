@@ -47,15 +47,17 @@ const CORR_H_ATTACHMENT_KEY: AttachmentKey = AttachmentKey(9);
 const TRACE_H_ATTACHMENT_KEY: AttachmentKey = AttachmentKey(10);
 
 impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for TraceabilityHandler {
-    fn process<'i1, 'i2, 'o>(&'i1 self, exchange: &'i2 mut LambdaExchange) -> HandlerOutput<'o>
+    fn exec<'handler, 'exchange, 'result>(
+        &'handler self,
+        exchange: &'exchange mut LambdaExchange,
+    ) -> HandlerOutput<'result>
     where
-        'i1: 'o,
-        'i2: 'o,
-        Self: 'o,
+        'handler: 'result,
+        'exchange: 'result,
+        Self: 'result,
     {
         tracing::debug!("Traceability handler starts");
         Box::pin(async move {
-
             if !self.config.get().enabled {
                 return Ok(HandlerStatus::new(Code::DISABLED));
             }

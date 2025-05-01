@@ -15,7 +15,7 @@ impl Display for HandlerExecutionError {
 pub struct HandlerStatus {
     code: Code,
     message: Option<&'static str>,
-    description: Option<&'static str>
+    details: Option<&'static str>
 }
 
 impl HandlerStatus {
@@ -28,7 +28,7 @@ impl HandlerStatus {
     }
 
     pub fn new(code: Code) -> HandlerStatus {
-        Self {code, message: None, description: None}
+        Self {code, message: None, details: None}
     }
 
     pub fn set_message(mut self, message: &'static str) -> HandlerStatus {
@@ -36,8 +36,8 @@ impl HandlerStatus {
         self
     }
 
-    pub fn set_description(mut self, description: &'static str) -> HandlerStatus {
-        self.description = Some(description);
+    pub fn set_details(mut self, description: &'static str) -> HandlerStatus {
+        self.details = Some(description);
         self
     }
 
@@ -117,14 +117,3 @@ impl BitOr for Code {
         Self(self.0 | rhs.0)
     }
 }
-
-
-//pub HandlerCode {
-////    Ok,
-////    RequestCompleted,
-////    ServerError,
-////    ClientError,
-////    Disabled,
-////    Timeout,
-////    Continue
-//}

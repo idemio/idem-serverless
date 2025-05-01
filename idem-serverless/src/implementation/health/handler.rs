@@ -25,7 +25,7 @@ impl HealthCheckHandler {
 }
 
 impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for HealthCheckHandler {
-    fn process<'i1, 'i2, 'o>(&'i1 self, exchange: &'i2 mut LambdaExchange) -> HandlerOutput<'o>
+    fn exec<'i1, 'i2, 'o>(&'i1 self, exchange: &'i2 mut LambdaExchange) -> HandlerOutput<'o>
     where
         'i1: 'o,
         'i2: 'o,

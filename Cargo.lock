@@ -1350,6 +1350,9 @@ dependencies = [
 [[package]]
 name = "idem-handler"
 version = "0.1.0"
+dependencies = [
+ "idem-config",
+]
 
 [[package]]
 name = "idem-serverless"
@@ -1362,7 +1365,6 @@ dependencies = [
  "idem-handler",
  "jsonwebtoken",
  "lambda_http",
- "log",
  "rsa",
  "serde",
  "serde_json",

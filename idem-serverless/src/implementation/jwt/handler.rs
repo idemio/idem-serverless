@@ -1,6 +1,7 @@
 use crate::entry::LambdaExchange;
 use crate::implementation::jwt::config::JwtValidationHandlerConfig;
 use crate::implementation::jwt::jwk_provider::JwkProvider;
+use crate::implementation::jwt::{AUTH_HEADER_NAME, BEARER_PREFIX};
 use crate::implementation::HandlerOutput;
 use idem_config::config::{Config, ConfigProvider};
 use idem_handler::handler::Handler;
@@ -10,12 +11,12 @@ use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation};
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::Context;
 use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Serialize, Deserialize)]
-struct Claims {
-    sub: String,
-    exp: usize,
-}
+use serde_json::Value;
+//#[derive(Debug, Serialize, Deserialize)]
+//struct Claims {
+//    sub: String,
+//    exp: usize,
+//}
 
 pub struct JwtValidationHandler {
     config: Config<JwtValidationHandlerConfig>,
@@ -32,7 +33,7 @@ impl JwtValidationHandler {
 }
 
 impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for JwtValidationHandler {
-    fn process<'handler, 'exchange, 'result>(
+    fn exec<'handler, 'exchange, 'result>(
         &'handler self,
         exchange: &'exchange mut LambdaExchange,
     ) -> HandlerOutput<'result>
@@ -50,7 +51,7 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for JwtVa
             if let Some((_, auth_header_value)) = request
                 .headers
                 .iter()
-                .find(|(header_key, _)| header_key.to_string().to_lowercase() == "authorization")
+                .find(|(header_key, _)| header_key.to_string().to_lowercase() == AUTH_HEADER_NAME)
             {
                 let auth_header_parts = auth_header_value
                     .to_str()
@@ -58,7 +59,9 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for JwtVa
                     .split(' ')
                     .collect::<Vec<&str>>();
 
-                if auth_header_parts.len() != 2 || !(auth_header_parts[0] == "Bearer") {
+                if auth_header_parts.len() != 2
+                    || !(auth_header_parts[0].to_lowercase() == BEARER_PREFIX)
+                {
                     return Ok(HandlerStatus::new(Code::CLIENT_ERROR)
                         .set_message("Missing client bearer token header"));
                 }
@@ -112,14 +115,14 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for JwtVa
                 };
 
                 let validation = Validation::new(Algorithm::RS256);
-                let token_data = match decode::<Claims>(token, &decoding_key, &validation) {
+                let token_data = match decode::<Value>(token, &decoding_key, &validation) {
                     Ok(token_data) => token_data,
                     Err(_) => {
                         return Ok(HandlerStatus::new(Code::CLIENT_ERROR).set_message("Invalid JWT"))
                     }
                 };
 
-                let claims = token_data.claims;
+                let claims = token_data.claims;;
                 Ok(HandlerStatus::new(Code::OK))
             } else {
                 return Ok(HandlerStatus::new(Code::CLIENT_ERROR).set_message("Missing JWT"));
@@ -130,7 +133,7 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for JwtVa
 
 mod test {
     use crate::entry::LambdaExchange;
-    use crate::implementation::jwt::handler::{Claims, JwtValidationHandler};
+    use crate::implementation::jwt::handler::JwtValidationHandler;
     use base64::prelude::BASE64_URL_SAFE_NO_PAD;
     use base64::Engine;
     use idem_config::config::{Config, DefaultConfigProvider};
@@ -142,6 +145,7 @@ mod test {
     use lambda_http::http::HeaderValue;
     use rsa::pkcs1::EncodeRsaPrivateKey;
     use rsa::RsaPrivateKey;
+    use serde::{Deserialize, Serialize};
     use std::error::Error;
     use std::fs::File;
 
@@ -156,6 +160,12 @@ mod test {
         let p = rsa::BigUint::from_bytes_be(&b64_decode(jwk["p"].as_str().unwrap())?);
         let q = rsa::BigUint::from_bytes_be(&b64_decode(jwk["q"].as_str().unwrap())?);
         Ok(RsaPrivateKey::from_components(n, e, d, vec![p, q]).unwrap())
+    }
+
+    #[derive(Serialize, Deserialize)]
+    struct Claims {
+        sub: String,
+        exp: usize,
     }
 
     fn get_test_key_gen() -> String {
@@ -202,7 +212,7 @@ mod test {
 
         // make sure the result is OK
         let result = jwt_validation_handler
-            .process(&mut test_exchange)
+            .exec(&mut test_exchange)
             .await
             .unwrap();
         let result_code = result.code();
@@ -237,7 +247,7 @@ mod test {
         let jwt_validation_handler =
             JwtValidationHandler::new(Config::new(DefaultConfigProvider).unwrap());
         let result = jwt_validation_handler
-            .process(&mut test_exchange)
+            .exec(&mut test_exchange)
             .await
             .unwrap();
 

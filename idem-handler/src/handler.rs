@@ -1,6 +1,5 @@
-use std::pin::Pin;
 use crate::exchange::Exchange;
-use crate::status::{HandlerExecutionError, HandlerStatus};
+use crate::HandlerOutput;
 
 pub trait Handler<Input, Output, Metadata>: Send
 where
@@ -8,13 +7,12 @@ where
     Output: Default + Send,
     Metadata: Send,
 {
-    fn process<'handler, 'exchange, 'result>(
+    fn exec<'handler, 'exchange, 'result>(
         &'handler self,
         exchange: &'exchange mut Exchange<Input, Output, Metadata>,
-    ) -> Pin<Box<dyn Future<Output = Result<HandlerStatus, HandlerExecutionError>> + Send + 'result>>
+    ) -> HandlerOutput<'result>
     where
         'handler: 'result,
         'exchange: 'result,
         Self: 'result;
-
 }

@@ -1,38 +1,33 @@
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 
-pub struct Exchange<I, O, M>
-where
-    I: Default + Send,
-    O: Default + Send,
-    M: Send,
-{
-    metadata: Option<M>,
-    input: I,
-    output: O,
-    input_listeners: Vec<Callback<I>>,
-    output_listeners: Vec<Callback<O>>,
+pub struct Exchange<Input, Output, Metadata> {
+    metadata: Option<Metadata>,
+    input: Input,
+    output: Output,
+    input_listeners: Vec<Callback<Input>>,
+    output_listeners: Vec<Callback<Output>>,
     attachments: Attachments,
 }
 
-impl<I, O, M> Exchange<I, O, M>
+impl<Input, Output, Metadata> Exchange<Input, Output, Metadata>
 where
-    I: Default + Send + 'static,
-    O: Default + Send + 'static,
-    M: Send,
+    Input: Default + Send + 'static,
+    Output: Default + Send + 'static,
+    Metadata: Send,
 {
     pub fn new() -> Self {
         Self {
             metadata: None,
-            input: I::default(),
-            output: O::default(),
+            input: Input::default(),
+            output: Output::default(),
             input_listeners: vec![],
             output_listeners: vec![],
             attachments: Attachments::new(),
         }
     }
 
-    pub fn add_metadata(&mut self, metadata: M) {
+    pub fn add_metadata(&mut self, metadata: Metadata) {
         self.metadata = Some(metadata);
     }
 
@@ -46,14 +41,14 @@ where
 
     pub fn add_input_listener(
         &mut self,
-        callback: impl FnMut(&mut I, &mut Attachments) + Send + 'static,
+        callback: impl FnMut(&mut Input, &mut Attachments) + Send + 'static,
     ) {
         self.input_listeners.push(Callback::new(callback));
     }
 
     pub fn add_output_listener(
         &mut self,
-        callback: impl FnMut(&mut O, &mut Attachments) + Send + 'static,
+        callback: impl FnMut(&mut Output, &mut Attachments) + Send + 'static,
     ) {
         self.output_listeners.push(Callback::new(callback));
     }
@@ -72,19 +67,19 @@ where
         Ok(())
     }
 
-    pub fn save_input(&mut self, request: I) {
+    pub fn save_input(&mut self, request: Input) {
         self.input = request;
     }
 
-    pub fn input(&self) -> Result<&I, ()> {
+    pub fn input(&self) -> Result<&Input, ()> {
         Ok(&self.input)
     }
 
-    pub fn input_mut(&mut self) -> Result<&mut I, ()> {
+    pub fn input_mut(&mut self) -> Result<&mut Input, ()> {
         Ok(&mut self.input)
     }
 
-    pub fn consume_request(&mut self) -> Result<I, ()> {
+    pub fn consume_request(&mut self) -> Result<Input, ()> {
         match self.execute_input_callbacks() {
             Ok(_) => {
                 let consumed = std::mem::take(&mut self.input);
@@ -94,19 +89,19 @@ where
         }
     }
 
-    pub fn save_output(&mut self, response: O) {
+    pub fn save_output(&mut self, response: Output) {
         self.output = response;
     }
 
-    pub fn output(&self) -> Result<&O, ()> {
+    pub fn output(&self) -> Result<&Output, ()> {
         Ok(&self.output)
     }
 
-    pub fn output_mut(&mut self) -> Result<&mut O, ()> {
+    pub fn output_mut(&mut self) -> Result<&mut Output, ()> {
         Ok(&mut self.output)
     }
 
-    pub fn consume_output(&mut self) -> Result<O, ()> {
+    pub fn consume_output(&mut self) -> Result<Output, ()> {
         match self.execute_output_callbacks() {
             Ok(_) => {
                 let consumed = std::mem::take(&mut self.output);

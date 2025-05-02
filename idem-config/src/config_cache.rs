@@ -1,46 +1,33 @@
-use std::collections::HashMap;
-use std::sync::{Arc, LazyLock, RwLock};
-static FILE_CACHE: LazyLock<RwLock<HashMap<String, Arc<String>>>> =
-    LazyLock::new(|| RwLock::new(HashMap::new()));
+use dashmap::DashMap;
+use once_cell::sync::Lazy;
+use std::sync::Arc;
+use std::fs;
 
-pub fn get_config_file(file_path: &str) -> Result<Arc<String>, ()> {
-    {
-        let cache = FILE_CACHE.read().unwrap();
-        if let Some(contents) = cache.get(file_path) {
-            return Ok(contents.clone());
-        }
+static FILE_CACHE: Lazy<DashMap<String, Arc<String>>> = Lazy::new(DashMap::new);
+
+pub fn get_config_file(file_path: &str) -> Result<Arc<String>, String> {
+    if let Some(contents) = FILE_CACHE.get(file_path) {
+        return Ok(contents.clone());
     }
-
     let contents = Arc::new(
-        std::fs::read_to_string(file_path)
-            .map_err(|e| format!("Failed to read file: {}", e))
-            .unwrap(),
+        fs::read_to_string(file_path)
+            .map_err(|e| format!("Failed to read file: {}", e))?,
     );
-
-    {
-        let mut cache = FILE_CACHE.write().unwrap();
-        cache.insert(file_path.to_string(), contents.clone());
-    }
-
+    FILE_CACHE.insert(file_path.to_string(), contents.clone());
     Ok(contents)
 }
 
-pub fn init_or_replace_config(file_path: &str) -> Result<(), ()> {
-    match std::fs::read_to_string(file_path) {
-        Ok(content) => {
-            let content = Arc::new(content);
-            FILE_CACHE
-                .write()
-                .unwrap()
-                .insert(file_path.to_string(), content.clone());
-            Ok(())
-        }
-        Err(_) => Err(()),
-    }
+pub fn init_or_replace_config(file_path: &str) -> Result<(), String> {
+    let contents = Arc::new(
+        fs::read_to_string(file_path)
+            .map_err(|e| format!("Failed to read file: {}", e))?,
+    );
+    FILE_CACHE.insert(file_path.to_string(), contents);
+    Ok(())
 }
 
 pub fn clear_cache() {
-    FILE_CACHE.write().unwrap().clear();
+    FILE_CACHE.clear();
 }
 
 #[cfg(test)]

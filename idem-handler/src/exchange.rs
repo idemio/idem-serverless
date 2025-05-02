@@ -3,8 +3,8 @@ use std::collections::HashMap;
 
 pub struct Exchange<Input, Output, Metadata> {
     metadata: Option<Metadata>,
-    input: Input,
-    output: Output,
+    input: Option<Input>,
+    output: Option<Output>,
     input_listeners: Vec<Callback<Input>>,
     output_listeners: Vec<Callback<Output>>,
     attachments: Attachments,
@@ -12,15 +12,15 @@ pub struct Exchange<Input, Output, Metadata> {
 
 impl<Input, Output, Metadata> Exchange<Input, Output, Metadata>
 where
-    Input: Default + Send + 'static,
-    Output: Default + Send + 'static,
+    Input: Send + 'static,
+    Output: Send + 'static,
     Metadata: Send,
 {
     pub fn new() -> Self {
         Self {
             metadata: None,
-            input: Input::default(),
-            output: Output::default(),
+            input: None,
+            output: None,
             input_listeners: vec![],
             output_listeners: vec![],
             attachments: Attachments::new(),
@@ -54,60 +54,76 @@ where
     }
 
     fn execute_input_callbacks(&mut self) -> Result<(), ()> {
-        self.input_listeners.iter_mut().for_each(|listener| {
-            listener.invoke(&mut self.input, &mut self.attachments);
-        });
-        Ok(())
+        if let Some(input) = &mut self.input {
+            for mut callback in &mut self.input_listeners.drain(..) {
+                callback.invoke(input, &mut self.attachments);
+            }
+            Ok(())
+        } else {
+            Err(())
+        }
     }
 
     fn execute_output_callbacks(&mut self) -> Result<(), ()> {
-        self.output_listeners.iter_mut().for_each(|listener| {
-            listener.invoke(&mut self.output, &mut self.attachments);
-        });
-        Ok(())
+        if let Some(output) = &mut self.output {
+            for mut callback in &mut self.output_listeners.drain(..) {
+                callback.invoke(output, &mut self.attachments);
+            }
+            Ok(())
+        } else {
+            Err(())
+        }
     }
 
     pub fn save_input(&mut self, request: Input) {
-        self.input = request;
+        self.input = Some(request);
     }
 
     pub fn input(&self) -> Result<&Input, ()> {
-        Ok(&self.input)
+        match &self.input {
+            Some(out) => Ok(out),
+            None => Err(()),
+        }
     }
 
     pub fn input_mut(&mut self) -> Result<&mut Input, ()> {
-        Ok(&mut self.input)
+        match &mut self.input {
+            Some(out) => Ok(out),
+            None => Err(()),
+        }
     }
 
-    pub fn consume_request(&mut self) -> Result<Input, ()> {
-        match self.execute_input_callbacks() {
-            Ok(_) => {
-                let consumed = std::mem::take(&mut self.input);
-                Ok(consumed)
-            }
-            Err(_) => Err(()),
+    pub fn take_request(&mut self) -> Result<Input, ()> {
+        if let Ok(_) = self.execute_input_callbacks() {
+            self.input.take().ok_or_else(|| ())
+        } else {
+            Err(())
         }
     }
 
     pub fn save_output(&mut self, response: Output) {
-        self.output = response;
+        self.output = Some(response);
     }
 
     pub fn output(&self) -> Result<&Output, ()> {
-        Ok(&self.output)
+        match &self.output {
+            Some(out) => Ok(out),
+            None => Err(()),
+        }
     }
 
     pub fn output_mut(&mut self) -> Result<&mut Output, ()> {
-        Ok(&mut self.output)
+        match &mut self.output {
+            Some(out) => Ok(out),
+            None => Err(()),
+        }
     }
 
-    pub fn consume_output(&mut self) -> Result<Output, ()> {
-        match self.execute_output_callbacks() {
-            Ok(_) => {
-                let consumed = std::mem::take(&mut self.output);
-                Ok(consumed)
-            }
-            Err(_) => Err(()),
+    pub fn take_output(&mut self) -> Result<Output, ()> {
+        if let Ok(_) = self.execute_output_callbacks() {
+            self.output.take().ok_or_else(|| ())
+        } else {
+            Err(())
         }
     }
 }
@@ -159,23 +175,23 @@ impl Attachments {
 // TODO - change how attachment keys work (probably string)
 /* I wanted to make this struct use TypeId::of::<>() but it's not stable. */
 #[derive(PartialOrd, PartialEq, Hash, Eq)]
-pub struct AttachmentKey(pub u32);
+pub struct AttachmentKey(pub &'static str);
 
-pub struct Callback<P> {
-    callback: Box<dyn FnMut(&mut P, &mut Attachments) + Send>,
+pub struct Callback<T> {
+    callback: Box<dyn FnMut(&mut T, &mut Attachments) + Send>,
 }
 
-impl<P> Callback<P>
+impl<T> Callback<T>
 where
-    P: Send + 'static,
+    T: Send + 'static,
 {
-    pub fn new(callback: impl FnMut(&mut P, &mut Attachments) + Send + 'static) -> Self {
+    pub fn new(callback: impl FnMut(&mut T, &mut Attachments) + Send + 'static) -> Self {
         Self {
             callback: Box::new(callback),
         }
     }
 
-    pub fn invoke(&mut self, write: &mut P, attachments: &mut Attachments) {
+    pub fn invoke(&mut self, write: &mut T, attachments: &mut Attachments) {
         (self.callback)(write, attachments);
     }
 }

@@ -7,15 +7,14 @@ use idem_handler::status::{Code, HandlerStatus};
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::http::{HeaderMap, HeaderName, HeaderValue};
 use lambda_http::{tracing, Context};
+use idem_macro::ConfigurableHandler;
 
+#[derive(ConfigurableHandler)]
 pub struct TraceabilityHandler {
     config: Config<TraceabilityHandlerConfig>,
 }
 
 impl TraceabilityHandler {
-    pub fn new(config: Config<TraceabilityHandlerConfig>) -> Self {
-        Self { config }
-    }
 
     fn find_or_create_uuid(
         headers: &HeaderMap,
@@ -41,10 +40,10 @@ impl TraceabilityHandler {
     }
 }
 
-const TRACE_V_ATTACHMENT_KEY: AttachmentKey = AttachmentKey(7);
-const CORR_V_ATTACHMENT_KEY: AttachmentKey = AttachmentKey(8);
-const CORR_H_ATTACHMENT_KEY: AttachmentKey = AttachmentKey(9);
-const TRACE_H_ATTACHMENT_KEY: AttachmentKey = AttachmentKey(10);
+const TRACE_V_ATTACHMENT_KEY: AttachmentKey = AttachmentKey("trace_v");
+const CORR_V_ATTACHMENT_KEY: AttachmentKey = AttachmentKey("corr_v");
+const CORR_H_ATTACHMENT_KEY: AttachmentKey = AttachmentKey("corr_h");
+const TRACE_H_ATTACHMENT_KEY: AttachmentKey = AttachmentKey("trace_h");
 
 impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for TraceabilityHandler {
     fn exec<'handler, 'exchange, 'result>(

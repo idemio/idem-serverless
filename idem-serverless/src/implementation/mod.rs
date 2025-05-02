@@ -13,7 +13,7 @@ use crate::implementation::{
     traceability::handler::TraceabilityHandler,
 };
 use idem_config::config::{
-    Config, ConfigProvider, DefaultConfigProvider, FileConfigProvider, ProviderType,
+    Config, DefaultConfigProvider, FileConfigProvider, ProviderType,
 };
 use idem_handler::exchange::Exchange;
 use idem_handler::factory::HandlerFactory;
@@ -23,7 +23,6 @@ use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayPr
 use lambda_http::Context;
 use std::future::Future;
 use std::pin::Pin;
-use std::str::FromStr;
 
 pub type LambdaExchange = Exchange<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>;
 pub type HandlerOutput<'a> =
@@ -39,11 +38,14 @@ pub enum LambdaHandler {
 }
 
 impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for LambdaHandler {
-    fn exec<'i1, 'i2, 'o>(&'i1 self, exchange: &'i2 mut LambdaExchange) -> HandlerOutput<'o>
+    fn exec<'handler, 'exchange, 'result>(
+        &'handler self,
+        exchange: &'exchange mut LambdaExchange,
+    ) -> HandlerOutput<'result>
     where
-        'i1: 'o,
-        'i2: 'o,
-        Self: 'o,
+        'handler: 'result,
+        'exchange: 'result,
+        Self: 'result,
     {
         match self {
             LambdaHandler::ProxyHandler(handler) => handler.exec(exchange),
@@ -77,7 +79,9 @@ impl HandlerFactory<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>
                     }),
                     ProviderType::Default => Config::new(DefaultConfigProvider),
                 }?;
-                Ok(LambdaHandler::ProxyHandler(LambdaProxyHandler::new(config)))
+                Ok(LambdaHandler::ProxyHandler(
+                    LambdaProxyHandler::init_handler(config),
+                ))
             }
             "TraceabilityHandler" => {
                 let config = match provider_type {
@@ -88,7 +92,7 @@ impl HandlerFactory<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>
                     ProviderType::Default => Config::new(DefaultConfigProvider),
                 }?;
                 Ok(LambdaHandler::TraceabilityHandler(
-                    TraceabilityHandler::new(config),
+                    TraceabilityHandler::init_handler(config),
                 ))
             }
             "HeaderHandler" => {
@@ -99,7 +103,9 @@ impl HandlerFactory<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>
                     }),
                     ProviderType::Default => Config::new(DefaultConfigProvider),
                 }?;
-                Ok(LambdaHandler::HeaderHandler(HeaderHandler::new(config)))
+                Ok(LambdaHandler::HeaderHandler(HeaderHandler::init_handler(
+                    config,
+                )))
             }
             "JwtValidationHandler" => {
                 let config = match provider_type {
@@ -110,7 +116,7 @@ impl HandlerFactory<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>
                     ProviderType::Default => Config::new(DefaultConfigProvider),
                 }?;
                 Ok(LambdaHandler::JwtValidationHandler(
-                    JwtValidationHandler::new(config),
+                    JwtValidationHandler::init_handler(config),
                 ))
             }
             "CorsHandler" => {
@@ -121,7 +127,9 @@ impl HandlerFactory<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>
                     }),
                     ProviderType::Default => Config::new(DefaultConfigProvider),
                 }?;
-                Ok(LambdaHandler::CorsHandler(CorsHandler::new(config)))
+                Ok(LambdaHandler::CorsHandler(CorsHandler::init_handler(
+                    config,
+                )))
             }
             "HealthHandler" => {
                 let config = match provider_type {
@@ -131,9 +139,9 @@ impl HandlerFactory<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>
                     }),
                     ProviderType::Default => Config::new(DefaultConfigProvider),
                 }?;
-                Ok(LambdaHandler::HealthCheckHandler(HealthCheckHandler::new(
-                    config,
-                )))
+                Ok(LambdaHandler::HealthCheckHandler(
+                    HealthCheckHandler::init_handler(config),
+                ))
             }
             _ => Err(()),
         }

@@ -15,11 +15,10 @@ impl Display for HandlerExecutionError {
 pub struct HandlerStatus {
     code: Code,
     message: Option<&'static str>,
-    details: Option<&'static str>
+    details: Option<&'static str>,
 }
 
 impl HandlerStatus {
-
     pub fn code(&self) -> Code {
         self.code
     }
@@ -27,8 +26,16 @@ impl HandlerStatus {
         self.message.unwrap_or_else(|| "")
     }
 
+    pub fn details(&self) -> &'static str {
+        self.details.unwrap_or_else(|| "")
+    }
+
     pub fn new(code: Code) -> HandlerStatus {
-        Self {code, message: None, details: None}
+        Self {
+            code,
+            message: None,
+            details: None,
+        }
     }
 
     pub fn set_message(mut self, message: &'static str) -> HandlerStatus {
@@ -40,10 +47,9 @@ impl HandlerStatus {
         self.details = Some(description);
         self
     }
-
 }
 
-#[derive(Clone,Copy)]
+#[derive(Clone, Copy)]
 pub struct Code(pub i32);
 
 impl Code {
@@ -64,7 +70,7 @@ impl Code {
     }
 
     pub fn all_flags(&self, flags: Code) -> bool {
-        self.0 & flags.0 == 0
+        self.0 & flags.0 == flags.0
     }
 
     pub fn all_flags_clear(&self, flags: Code) -> bool {
@@ -100,20 +106,34 @@ impl Not for Code {
 
 impl BitAnd for Code {
     type Output = Self;
-    fn bitand(
-        self,
-        rhs: Self
-    ) -> Self::Output {
+    fn bitand(self, rhs: Self) -> Self::Output {
         Self(self.0 & rhs.0)
     }
 }
 
 impl BitOr for Code {
     type Output = Self;
-    fn bitor(
-        self,
-        rhs: Self
-    ) -> Self::Output {
+    fn bitor(self, rhs: Self) -> Self::Output {
         Self(self.0 | rhs.0)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::status::Code;
+
+    #[test]
+    fn test_status_flags() {
+        let mut test_code = Code::OK;
+        test_code |= Code::REQUEST_COMPLETED;
+        assert!(test_code.all_flags(Code::OK | Code::REQUEST_COMPLETED));
+        assert!(test_code.all_flags_clear(Code::DISABLED | Code::TIMEOUT | Code::CONTINUE | Code::CLIENT_ERROR | Code::SERVER_ERROR));
+    }
+
+    #[test]
+    fn test_status_constructs() {
+        let test_code1 = Code::OK | Code::SERVER_ERROR;
+        let test_code2 = Code::from(test_code1 | Code::REQUEST_COMPLETED);
+        assert!(test_code2.all_flags(Code::OK | Code::SERVER_ERROR | Code::REQUEST_COMPLETED));
     }
 }

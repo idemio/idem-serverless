@@ -1,4 +1,4 @@
-use std::fs::File;
+use std::sync::Arc;
 use crate::implementation::{LambdaHandlerExecutor, LambdaHandlerFactory};
 use idem_config::config::{ ProviderType};
 use idem_handler::exchange::Exchange;
@@ -15,8 +15,8 @@ pub async fn entry(
 ) -> Result<ApiGatewayProxyResponse, Error> {
 
     // Load the execution flow configuration
-    let config_file = get_config_file("/opt/config/handlers.json").unwrap();
-    let execution_flow_config: ExecutionFlowConfig = serde_json::from_reader(&config_file).unwrap();
+    let config_file: Arc<String> = get_config_file("/opt/config/handlers.json").unwrap();
+    let execution_flow_config: ExecutionFlowConfig = serde_json::from_str(&config_file).unwrap();
     let (payload, context) = event.into_parts();
 
     let path = match &payload.path {
@@ -75,7 +75,7 @@ pub async fn entry(
                 }
             }
 
-            return Ok(exchange.consume_output().unwrap());
+            return Ok(exchange.take_output().unwrap());
         }
     }
 

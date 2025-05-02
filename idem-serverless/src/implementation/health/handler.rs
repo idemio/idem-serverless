@@ -9,19 +9,15 @@ use idem_handler::status::{Code, HandlerStatus};
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::http::header::CONTENT_TYPE;
 use lambda_http::Context;
+use idem_macro::ConfigurableHandler;
 
 const HEALTH_STATUS: u32 = 200u32;
 const HEALTH_BODY: &str = "OK";
 const HEALTH_ERROR: &str = "ERROR";
 
+#[derive(ConfigurableHandler)]
 pub struct HealthCheckHandler {
     config: Config<HealthCheckHandlerConfig>,
-}
-
-impl HealthCheckHandler {
-    pub(crate) fn new(config: Config<HealthCheckHandlerConfig>) -> Self {
-        Self { config }
-    }
 }
 
 impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for HealthCheckHandler {

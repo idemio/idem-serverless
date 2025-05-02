@@ -9,17 +9,13 @@ use idem_handler::status::{Code, HandlerStatus};
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::Context;
 use std::ops::Add;
+use idem_macro::ConfigurableHandler;
 
 pub const FUNCTION_NAME_SEPARATOR: &str = "@";
 
+#[derive(ConfigurableHandler)]
 pub struct LambdaProxyHandler {
     config: Config<LambdaProxyHandlerConfig>,
-}
-
-impl LambdaProxyHandler {
-    pub fn new(config: Config<LambdaProxyHandlerConfig>) -> Self {
-        Self { config }
-    }
 }
 
 impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for LambdaProxyHandler {
@@ -39,7 +35,7 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for Lambd
                 return Ok(HandlerStatus::new(Code::DISABLED));
             }
 
-            match exchange.consume_request() {
+            match exchange.take_request() {
                 Ok(request) => {
                     let payload = serde_json::to_string(&request).unwrap();
                     let path = match request.path {

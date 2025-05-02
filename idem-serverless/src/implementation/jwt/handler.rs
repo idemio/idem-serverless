@@ -10,23 +10,15 @@ use jsonwebtoken::jwk::{AlgorithmParameters, JwkSet};
 use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation};
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::Context;
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
-//#[derive(Debug, Serialize, Deserialize)]
-//struct Claims {
-//    sub: String,
-//    exp: usize,
-//}
+use idem_macro::ConfigurableHandler;
 
+#[derive(ConfigurableHandler)]
 pub struct JwtValidationHandler {
     config: Config<JwtValidationHandlerConfig>,
 }
 
 impl JwtValidationHandler {
-    pub fn new(config: Config<JwtValidationHandlerConfig>) -> Self {
-        JwtValidationHandler { config }
-    }
-
     fn fetch_jwk(&self) -> Result<JwkSet, ()> {
         self.config.get().jwk_provider.jwk()
     }
@@ -122,7 +114,9 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for JwtVa
                     }
                 };
 
-                let claims = token_data.claims;;
+                let claims = token_data.claims;
+
+
                 Ok(HandlerStatus::new(Code::OK))
             } else {
                 return Ok(HandlerStatus::new(Code::CLIENT_ERROR).set_message("Missing JWT"));
@@ -131,6 +125,7 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for JwtVa
     }
 }
 
+#[cfg(test)]
 mod test {
     use crate::entry::LambdaExchange;
     use crate::implementation::jwt::handler::JwtValidationHandler;
@@ -208,7 +203,7 @@ mod test {
         let mut test_exchange: LambdaExchange = Exchange::new();
         test_exchange.save_input(test_request);
         let jwt_validation_handler =
-            JwtValidationHandler::new(Config::new(DefaultConfigProvider).unwrap());
+            JwtValidationHandler::init_handler(Config::new(DefaultConfigProvider).unwrap());
 
         // make sure the result is OK
         let result = jwt_validation_handler
@@ -245,7 +240,7 @@ mod test {
 
         // execute the validation and get the result
         let jwt_validation_handler =
-            JwtValidationHandler::new(Config::new(DefaultConfigProvider).unwrap());
+            JwtValidationHandler::init_handler(Config::new(DefaultConfigProvider).unwrap());
         let result = jwt_validation_handler
             .exec(&mut test_exchange)
             .await

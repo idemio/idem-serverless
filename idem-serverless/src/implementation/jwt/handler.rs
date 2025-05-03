@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+use std::fmt::format;
 use crate::entry::LambdaExchange;
 use crate::implementation::jwt::config::JwtValidationHandlerConfig;
 use crate::implementation::jwt::jwk_provider::JwkProvider;
@@ -6,12 +8,17 @@ use crate::implementation::HandlerOutput;
 use idem_config::config::{Config, ConfigProvider};
 use idem_handler::handler::Handler;
 use idem_handler::status::{Code, HandlerStatus};
+use idem_macro::ConfigurableHandler;
 use jsonwebtoken::jwk::{AlgorithmParameters, JwkSet};
 use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation};
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::Context;
+use oas3::OpenApiV3Spec;
+use oas3::spec::PathItem;
 use serde_json::Value;
-use idem_macro::ConfigurableHandler;
+use idem_config::config_cache::get_file;
+use idem_handler::exchange::ExchangeError;
+use crate::ROOT_CONFIG_PATH;
 
 #[derive(ConfigurableHandler)]
 pub struct JwtValidationHandler {
@@ -21,6 +28,37 @@ pub struct JwtValidationHandler {
 impl JwtValidationHandler {
     fn fetch_jwk(&self) -> Result<JwkSet, ()> {
         self.config.get().jwk_provider.jwk()
+    }
+
+    fn find_matching_path(request_path: &str, paths: BTreeMap<String, PathItem>) {
+        paths.iter().find(|(path, _)| *path == request_path);
+        todo!()
+    }
+
+    fn validate_scope(&self, request_path: &str, claims: &Value) -> Result<(), ()> {
+        let spec_file  = get_file(&format!("{}/{}", ROOT_CONFIG_PATH, self.config.get().specification_name)).unwrap();
+        let spec_file: &str = &spec_file;
+        let parsed_spec = match oas3::from_yaml(spec_file) {
+            Ok(out) => out,
+            Err(_) => return Err(())
+        };
+
+        let paths = parsed_spec.paths.unwrap();
+        let matching_path = Self::find_matching_path(request_path, paths);
+
+        Ok(())
+    }
+
+    fn validate_aud(&self, claims: &Value) -> Result<(), ()> {
+        todo!()
+    }
+
+    fn validate_iss(&self, claims: &Value) -> Result<(), ()> {
+        todo!()
+    }
+
+    fn validate_exp(&self, claims: &Value) -> Result<(), ()> {
+        todo!()
     }
 }
 
@@ -39,8 +77,13 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for JwtVa
                 return Ok(HandlerStatus::new(Code::DISABLED));
             }
 
-            let request = exchange.input().unwrap();
-            if let Some((_, auth_header_value)) = request
+
+            let request = match exchange.input() {
+                Ok(req) => req,
+                Err(_) => return Ok(HandlerStatus::new(Code::SERVER_ERROR).set_message("Unable to get request"))
+            };
+
+            if let Some((_, auth_header_value)) = &request
                 .headers
                 .iter()
                 .find(|(header_key, _)| header_key.to_string().to_lowercase() == AUTH_HEADER_NAME)
@@ -75,6 +118,7 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for JwtVa
                             .set_message("Malformed JWT header"))
                     }
                 };
+
                 let kid = match header.kid {
                     Some(kid) => kid,
                     None => {
@@ -115,7 +159,31 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for JwtVa
                 };
 
                 let claims = token_data.claims;
+                let request_path = match &request.path {
+                    None => return Ok(HandlerStatus::new(Code::CLIENT_ERROR).set_message("Missing request path")),
+                    Some(val) => val
+                };
+                if self.config.get().scope_verification {
+                    if let Err(_) = self.validate_scope(&request_path, &claims) {
+                        return Ok(HandlerStatus::new(Code::CLIENT_ERROR)
+                            .set_message("Invalid scope for token"));
+                    }
+                }
 
+                if let Err(_) = self.validate_aud(&claims) {
+                    return Ok(HandlerStatus::new(Code::CLIENT_ERROR)
+                        .set_message("Invalid audience for token"));
+                }
+
+                if let Err(_) = self.validate_iss(&claims) {
+                    return Ok(HandlerStatus::new(Code::CLIENT_ERROR)
+                        .set_message("Invalid issuer for token"));
+                }
+
+                if let Err(_) = self.validate_exp(&claims) {
+                    return Ok(HandlerStatus::new(Code::CLIENT_ERROR)
+                        .set_message("Expired token"));
+                }
 
                 Ok(HandlerStatus::new(Code::OK))
             } else {

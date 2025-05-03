@@ -23,6 +23,7 @@ use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayPr
 use lambda_http::Context;
 use std::future::Future;
 use std::pin::Pin;
+use crate::ROOT_CONFIG_PATH;
 
 pub type LambdaExchange = Exchange<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>;
 pub type HandlerOutput<'a> =
@@ -75,7 +76,7 @@ impl HandlerFactory<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>
                 let config = match provider_type {
                     ProviderType::File => Config::new(FileConfigProvider {
                         config_name: "proxy.json".into(),
-                        base_path: "/opt/config".into(),
+                        base_path: ROOT_CONFIG_PATH.into(),
                     }),
                     ProviderType::Default => Config::new(DefaultConfigProvider),
                 }?;
@@ -87,7 +88,7 @@ impl HandlerFactory<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>
                 let config = match provider_type {
                     ProviderType::File => Config::new(FileConfigProvider {
                         config_name: "trace.json".into(),
-                        base_path: "/opt/config".into(),
+                        base_path: ROOT_CONFIG_PATH.into(),
                     }),
                     ProviderType::Default => Config::new(DefaultConfigProvider),
                 }?;
@@ -99,7 +100,7 @@ impl HandlerFactory<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>
                 let config = match provider_type {
                     ProviderType::File => Config::new(FileConfigProvider {
                         config_name: "header.json".into(),
-                        base_path: "/opt/config".into(),
+                        base_path: ROOT_CONFIG_PATH.into(),
                     }),
                     ProviderType::Default => Config::new(DefaultConfigProvider),
                 }?;
@@ -111,7 +112,7 @@ impl HandlerFactory<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>
                 let config = match provider_type {
                     ProviderType::File => Config::new(FileConfigProvider {
                         config_name: "jwt_validator.json".into(),
-                        base_path: "/opt/config".into(),
+                        base_path: ROOT_CONFIG_PATH.into(),
                     }),
                     ProviderType::Default => Config::new(DefaultConfigProvider),
                 }?;
@@ -123,7 +124,7 @@ impl HandlerFactory<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>
                 let config = match provider_type {
                     ProviderType::File => Config::new(FileConfigProvider {
                         config_name: "cors.json".into(),
-                        base_path: "/opt/config".into(),
+                        base_path: ROOT_CONFIG_PATH.into(),
                     }),
                     ProviderType::Default => Config::new(DefaultConfigProvider),
                 }?;
@@ -135,7 +136,7 @@ impl HandlerFactory<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>
                 let config = match provider_type {
                     ProviderType::File => Config::new(FileConfigProvider {
                         config_name: "health.json".into(),
-                        base_path: "/opt/config".into(),
+                        base_path: ROOT_CONFIG_PATH.into(),
                     }),
                     ProviderType::Default => Config::new(DefaultConfigProvider),
                 }?;

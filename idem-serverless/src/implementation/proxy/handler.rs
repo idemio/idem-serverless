@@ -11,7 +11,7 @@ use lambda_http::Context;
 use std::ops::Add;
 use idem_macro::ConfigurableHandler;
 
-pub const FUNCTION_NAME_SEPARATOR: &str = "@";
+const FUNCTION_NAME_SEPARATOR: &str = "@";
 
 #[derive(ConfigurableHandler)]
 pub struct LambdaProxyHandler {

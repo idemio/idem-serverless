@@ -57,6 +57,14 @@ pub fn derive_init_function(input: TokenStream) -> TokenStream {
                 }
             }
 
+            pub fn id() -> &'static str {
+                stringify!(#struct_name)
+            }
+
+            pub fn config_file_name() -> &'static str {
+                stringify!(#struct_name.json)
+            }
+
             pub fn config(&self) -> &Config<#inner_type> {
                 &self.config
             }

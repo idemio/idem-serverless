@@ -6,7 +6,7 @@ use idem_handler::handler::Handler;
 use idem_handler::status::Code;
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::{Context, Error, LambdaEvent};
-use idem_config::config_cache::get_config_file;
+use idem_config::config_cache::get_file;
 use idem_config::execution_flow_config::ExecutionFlowConfig;
 use idem_handler::factory::HandlerFactory;
 
@@ -15,7 +15,7 @@ pub async fn entry(
 ) -> Result<ApiGatewayProxyResponse, Error> {
 
     // Load the execution flow configuration
-    let config_file: Arc<String> = get_config_file("/opt/config/handlers.json").unwrap();
+    let config_file: Arc<String> = get_file("/opt/config/handlers.json").unwrap();
     let execution_flow_config: ExecutionFlowConfig = serde_json::from_str(&config_file).unwrap();
     let (payload, context) = event.into_parts();
 

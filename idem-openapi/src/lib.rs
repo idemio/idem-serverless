@@ -1,24 +1,16 @@
+mod constants;
+
 use idem_config::config_cache::get_file;
-use oas3::OpenApiV3Spec;
-use oas3::spec::{ObjectOrReference, ObjectSchema, Operation, Parameter, PathItem, SchemaType, SchemaTypeSet};
+use oas3::spec::{
+    ObjectOrReference, ObjectSchema, Operation, Parameter, SchemaType, SchemaTypeSet,
+};
+use oas3::{OpenApiV3Spec, Spec};
 use serde_json::{Value, json};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub struct OpenApiValidator {
     specification: OpenApiV3Spec,
 }
-
-const EMAIL_REGEX: &str = r#"^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$"#;
-const DATE_TIME_RFC3339_REGEX: &str =
-    r#"^((?:(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2}(?:\.\d+)?))(Z|[\+-]\d{2}:\d{2})?)$"#;
-const DATE_RFC339_REGEX: &str = r#"^(\d{4}-\d{2}-\d{2})$"#;
-const UUID_REGEX: &str = r#"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"#;
-const IPV6_REGEX: &str = r#"^((?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4})$"#;
-
-// technically, this regex allows you to have an invalid ip. i.e. 999.999.999.999.
-// is it worth adding more constraints?
-const IPV4_REGEX: &str = r#"^((?:[0-9]{1,3}\.){3}[0-9]{1,3})$"#;
-const HOSTNAME_REGEX: &str = r#"^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])$"#;
 
 impl OpenApiValidator {
     const PATH_SPLIT: char = '/';
@@ -64,41 +56,18 @@ impl OpenApiValidator {
 
     fn validate_string_format(string_value: &str, format: &str) -> bool {
         match format {
-            "date" => {
-                if let Ok(date_regex) = regex::Regex::new(DATE_RFC339_REGEX) {
-                    date_regex.is_match(string_value)
-                } else {
-                    false
-                }
-            }
-            "date-time" => {
-                if let Ok(date_time_regex) = regex::Regex::new(DATE_TIME_RFC3339_REGEX) {
-                    date_time_regex.is_match(string_value)
-                } else {
-                    false
-                }
-            }
-            "email" => {
-                if let Ok(email_regex) = regex::Regex::new(EMAIL_REGEX) {
-                    email_regex.is_match(string_value)
-                } else {
-                    false
-                }
-            }
-            "ipv4" => {
-                if let Ok(ipv4_regex) = regex::Regex::new(IPV4_REGEX) {
-                    ipv4_regex.is_match(string_value)
-                } else {
-                    false
-                }
-            }
-            "ipv6" => {
-                if let Ok(ipv6_regex) = regex::Regex::new(IPV6_REGEX) {
-                    ipv6_regex.is_match(string_value)
-                } else {
-                    false
-                }
-            }
+            constants::format::DATE => regex::Regex::new(constants::pattern::DATE_REGEX)
+                .is_ok_and(|reg| reg.is_match(string_value)),
+            constants::format::DATE_TIME => regex::Regex::new(constants::pattern::DATE_TIME_REGEX)
+                .is_ok_and(|reg| reg.is_match(string_value)),
+            constants::format::EMAIL => regex::Regex::new(constants::pattern::EMAIL_REGEX)
+                .is_ok_and(|reg| reg.is_match(string_value)),
+            constants::format::IPV4 => regex::Regex::new(constants::pattern::IPV4_REGEX)
+                .is_ok_and(|reg| reg.is_match(string_value)),
+            constants::format::IPV6 => regex::Regex::new(constants::pattern::IPV6_REGEX)
+                .is_ok_and(|reg| reg.is_match(string_value)),
+            constants::format::UUID => regex::Regex::new(constants::pattern::UUID_REGEX)
+                .is_ok_and(|reg| reg.is_match(string_value)),
             _ => {
                 println!("Unknown format: {}", format);
                 false
@@ -156,6 +125,18 @@ impl OpenApiValidator {
                 }
             }
 
+            if let Some(exl_max_int) = schema.exclusive_maximum.as_ref().and_then(|v| v.as_i64()) {
+                if int_val >= exl_max_int {
+                    return false;
+                }
+            }
+
+            if let Some(exl_min_int) = schema.exclusive_minimum.as_ref().and_then(|v| v.as_i64()) {
+                if int_val <= exl_min_int {
+                    return false;
+                }
+            }
+
             if let Some(multiple_of) = schema.multiple_of.as_ref().and_then(|v| v.as_i64()) {
                 if int_val % multiple_of != 0 {
                     return false;
@@ -167,43 +148,163 @@ impl OpenApiValidator {
                     return false;
                 }
             }
+
+            return true;
         }
-        true
+        false
     }
 
-    fn validate_for_type(value: &Value, type_val: &SchemaType, schema: &ObjectSchema) -> bool {
+    fn validate_array_rules(value: &Value, schema: &ObjectSchema, spec: &Spec) -> bool {
+        if let Some(array_val) = value.as_array() {
+            if let Some(max_items) = schema.max_items {
+                if array_val.len() > max_items as usize {
+                    return false;
+                }
+            }
+
+            if let Some(min_items) = schema.min_items {
+                if array_val.len() < min_items as usize {
+                    return false;
+                }
+            }
+
+            if let Some(unique_items) = schema.unique_items {
+                if unique_items {
+                    let mut found_set: HashSet<&Value> = HashSet::new();
+                    for item in array_val {
+                        if !found_set.insert(item) {
+                            return false;
+                        }
+                    }
+                }
+            }
+
+            if let Some(item_schema) = &schema.items {
+                if let Ok(resolved) = item_schema.resolve(spec) {
+                    for array_item in array_val {
+                        if !Self::validate_with_schema(array_item, &resolved, spec) {
+                            return false;
+                        }
+                    }
+                }
+            } else {
+                return false;
+            }
+
+            return true;
+        }
+        false
+    }
+
+    fn validate_boolean_rules(value: &Value, _schema: &ObjectSchema) -> bool {
+        if let Some(_) = value.as_bool() {
+            return true;
+        }
+        false
+    }
+
+    fn validate_null_rules(value: &Value, _schema: &ObjectSchema) -> bool {
+        if let Some(_) = value.as_null() {
+            return true;
+        }
+        false
+    }
+
+    fn validate_for_type(
+        value: &Value,
+        type_val: &SchemaType,
+        schema: &ObjectSchema,
+        spec: &Spec,
+    ) -> bool {
         match type_val {
-            SchemaType::Boolean => todo!("Implement boolean validation"),
+            SchemaType::Boolean => Self::validate_boolean_rules(value, schema),
             SchemaType::Integer => Self::validate_integer_rules(value, schema),
-            SchemaType::Number => todo!("Implement number validation"),
+            SchemaType::Number => Self::validate_number_rules(value, schema),
             SchemaType::String => Self::validate_string_rules(value, schema),
-            SchemaType::Array => todo!("implement array validation"),
-            SchemaType::Object => todo!("Implement object validation"),
-            SchemaType::Null => true,
+            SchemaType::Array => Self::validate_array_rules(value, schema, spec),
+            SchemaType::Object => Self::validate_object_rules(value, schema, spec),
+            SchemaType::Null => Self::validate_null_rules(value, schema),
         }
     }
 
-    fn validate_with_schema(value: &Value, schema: &ObjectSchema) -> bool {
+    fn validate_number_rules(value: &Value, schema: &ObjectSchema) -> bool {
+        if let Some(number_val) = value.as_f64() {
+            if let Some(max) = schema.maximum.as_ref().and_then(|v| v.as_f64()) {
+                if number_val > max {
+                    return false;
+                }
+            }
+
+            if let Some(min) = schema.minimum.as_ref().and_then(|v| v.as_f64()) {
+                if number_val < min {
+                    return false;
+                }
+            }
+
+            if let Some(exl_max) = schema.exclusive_maximum.as_ref().and_then(|v| v.as_f64()) {
+                if number_val >= exl_max {
+                    return false;
+                }
+            }
+
+            if let Some(exl_min) = schema.exclusive_minimum.as_ref().and_then(|v| v.as_f64()) {
+                if number_val <= exl_min {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+        false
+    }
+
+    fn validate_object_rules(value: &Value, schema: &ObjectSchema, spec: &Spec) -> bool {
+        if let Some(object_val) = value.as_object() {
+            if !schema.required.is_empty() {
+                let required_fields = &schema.required;
+                if required_fields
+                    .iter()
+                    .any(|field| !object_val.contains_key(field))
+                {
+                    return false;
+                }
+            }
+
+            for (field, field_schema) in &schema.properties {
+                if let Ok(resolved_schema) = field_schema.resolve(&spec) {
+                    if let Some(object_field_val) = object_val.get(field) {
+                        if !Self::validate_with_schema(object_field_val, &resolved_schema, spec) {
+                            return false;
+                        }
+                    }
+                }
+            }
+
+            return true;
+        }
+        false
+    }
+
+    fn validate_with_schema(value: &Value, schema: &ObjectSchema, spec: &Spec) -> bool {
         if let Some(schema_type_set) = &schema.schema_type {
             return match schema_type_set {
                 /* validate single types */
-                SchemaTypeSet::Single(type_val) => Self::validate_for_type(value, type_val, schema),
+                SchemaTypeSet::Single(type_val) => {
+                    Self::validate_for_type(value, type_val, schema, spec)
+                }
 
                 /* validate for multiple types */
                 // TODO - this assumes anyOf (need to implement to handle oneOf and allOf)
                 SchemaTypeSet::Multiple(type_vals) => type_vals
                     .iter()
-                    .any(|type_val| Self::validate_for_type(value, type_val, schema)),
+                    .any(|type_val| Self::validate_for_type(value, type_val, schema, spec)),
             };
         }
         false
     }
 
     pub fn get_scopes_for_path(&self, request_path: &str, method: &str) -> Vec<String> {
-        if let Some(spec_path) = self.get_matching_operation(request_path, method) {
-            todo!("Operation in the oas3 crate repo does not have security schemas")
-        }
-        vec![]
+        todo!("Operation in the oas3 crate repo does not have security schemas")
     }
 
     pub fn get_matching_operation(
@@ -248,14 +349,14 @@ impl OpenApiValidator {
                 segment_count += 1;
 
                 /* if the segment in the spec is a path parameter, we have to validate to make sure the target path given matches the schema for that parameter name */
-                if let (Some(start), Some(end)) = (spec_segment.find('{'), spec_segment.find('}')) {
+                if let (Some(start), Some(end)) = (spec_segment.find(Self::PATH_PARAM_LEFT), spec_segment.find(Self::PATH_PARAM_RIGHT)) {
                     let spec_segment_param_name = &spec_segment[start + 1..end];
                     if let Some(spec_segment_param_value) =
                         self.get_param_value(spec_segment_param_name, path_method_item_params)
                     {
                         if let Some(resolved_schema) = spec_segment_param_value.schema {
                             if let Ok(schema) = resolved_schema.resolve(&self.specification) {
-                                if Self::validate_with_schema(&json!(target_segment), &schema) {
+                                if Self::validate_with_schema(&json!(target_segment), &schema, &self.specification) {
                                     matching_segments += 1;
                                 }
                             }

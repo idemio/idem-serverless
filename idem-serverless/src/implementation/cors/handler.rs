@@ -1,6 +1,5 @@
-use crate::entry::LambdaExchange;
 use crate::implementation::cors::config::CorsHandlerConfig;
-use crate::implementation::{Handler, HandlerOutput};
+use crate::implementation::{Handler, HandlerOutput, LambdaExchange};
 use idem_config::config::Config;
 use idem_handler::exchange::AttachmentKey;
 use idem_handler::status::{Code, HandlerStatus};

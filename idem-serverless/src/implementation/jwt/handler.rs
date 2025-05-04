@@ -1,23 +1,18 @@
-use std::collections::BTreeMap;
-use std::fmt::format;
-use crate::entry::LambdaExchange;
 use crate::implementation::jwt::config::JwtValidationHandlerConfig;
 use crate::implementation::jwt::jwk_provider::JwkProvider;
 use crate::implementation::jwt::{AUTH_HEADER_NAME, BEARER_PREFIX};
-use crate::implementation::HandlerOutput;
+use crate::implementation::{HandlerOutput, LambdaExchange};
+use crate::ROOT_CONFIG_PATH;
 use idem_config::config::{Config, ConfigProvider};
 use idem_handler::handler::Handler;
 use idem_handler::status::{Code, HandlerStatus};
 use idem_macro::ConfigurableHandler;
+use idem_openapi::OpenApiValidator;
 use jsonwebtoken::jwk::{AlgorithmParameters, JwkSet};
 use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation};
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::Context;
-use oas3::spec::PathItem;
 use serde_json::Value;
-use idem_config::config_cache::get_file;
-use idem_openapi::OpenApiValidator;
-use crate::ROOT_CONFIG_PATH;
 
 #[derive(ConfigurableHandler)]
 pub struct JwtValidationHandler {
@@ -29,12 +24,30 @@ impl JwtValidationHandler {
         self.config.get().jwk_provider.jwk()
     }
 
-
     fn validate_scope(&self, request_path: &str, method: &str, claims: &Value) -> Result<(), ()> {
-        let spec_validator = OpenApiValidator::from_file(&format!("{}/{}", ROOT_CONFIG_PATH, "openapi.json"))?;
-        let scopes = spec_validator.get_scopes_for_path(request_path, method);
-        if scopes.iter().any(|scope| scope == &claims["scope"].as_str().unwrap()) {
-            return Ok(());
+        let spec_validator =
+            OpenApiValidator::from_file(&format!("{}/{}", ROOT_CONFIG_PATH, "openapi.json"))?;
+        let schemas = spec_validator.get_security_scopes(request_path, method);
+        let token_scopes = match claims.get("scope") {
+            None => return Err(()),
+            Some(scope) => {
+                if let Some(scope) = scope.as_str() {
+                    scope.split(' ').collect::<Vec<&str>>()
+                } else {
+                    return Err(());
+                }
+            }
+        };
+        if let Some(schemas) = schemas {
+            for (_, scopes) in schemas {
+                let potential_matched_scope = scopes.iter().find(|scope| {
+                    token_scopes.iter().any(|token_scope| scope == token_scope)
+                });
+
+                if potential_matched_scope.is_some() {
+                    return Ok(());
+                }
+            }
         }
         Err(())
     }
@@ -67,10 +80,13 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for JwtVa
                 return Ok(HandlerStatus::new(Code::DISABLED));
             }
 
-
             let request = match exchange.input() {
                 Ok(req) => req,
-                Err(_) => return Ok(HandlerStatus::new(Code::SERVER_ERROR).set_message("Unable to get request"))
+                Err(_) => {
+                    return Ok(
+                        HandlerStatus::new(Code::SERVER_ERROR).set_message("Unable to get request")
+                    )
+                }
             };
 
             if let Some((_, auth_header_value)) = &request
@@ -150,12 +166,16 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for JwtVa
 
                 let claims = token_data.claims;
                 let (request_path, method) = match (&request.path, &request.http_method) {
-                    (None, _) => return Ok(HandlerStatus::new(Code::CLIENT_ERROR).set_message("Missing request path")),
-                    (Some(path), method) => (path,method)
+                    (None, _) => {
+                        return Ok(HandlerStatus::new(Code::CLIENT_ERROR)
+                            .set_message("Missing request path"))
+                    }
+                    (Some(path), method) => (path, method),
                 };
 
                 if self.config.get().scope_verification {
-                    if let Err(_) = self.validate_scope(&request_path, &method.to_string(), &claims) {
+                    if let Err(_) = self.validate_scope(&request_path, &method.to_string(), &claims)
+                    {
                         return Ok(HandlerStatus::new(Code::CLIENT_ERROR)
                             .set_message("Invalid scope for token"));
                     }
@@ -172,8 +192,7 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for JwtVa
                 }
 
                 if let Err(_) = self.validate_exp(&claims) {
-                    return Ok(HandlerStatus::new(Code::CLIENT_ERROR)
-                        .set_message("Expired token"));
+                    return Ok(HandlerStatus::new(Code::CLIENT_ERROR).set_message("Expired token"));
                 }
 
                 Ok(HandlerStatus::new(Code::OK))
@@ -186,7 +205,6 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for JwtVa
 
 #[cfg(test)]
 mod test {
-    use crate::entry::LambdaExchange;
     use crate::implementation::jwt::handler::JwtValidationHandler;
     use base64::prelude::BASE64_URL_SAFE_NO_PAD;
     use base64::Engine;
@@ -202,6 +220,7 @@ mod test {
     use serde::{Deserialize, Serialize};
     use std::error::Error;
     use std::fs::File;
+    use crate::implementation::LambdaExchange;
 
     fn b64_decode(s: &str) -> Result<Vec<u8>, Box<dyn Error>> {
         Ok(BASE64_URL_SAFE_NO_PAD.decode(s)?)

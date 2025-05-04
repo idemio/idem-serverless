@@ -5,6 +5,7 @@ pub mod health;
 pub mod jwt;
 pub mod proxy;
 pub mod traceability;
+mod validator;
 
 use crate::implementation::jwt::handler::JwtValidationHandler;
 use crate::implementation::{

@@ -6,21 +6,24 @@ pub mod jwt;
 pub mod proxy;
 pub mod traceability;
 
+use crate::implementation::jwt::handler::JwtValidationHandler;
 use crate::implementation::{
     cors::handler::CorsHandler, header::handler::HeaderHandler,
     health::handler::HealthCheckHandler, proxy::handler::LambdaProxyHandler,
     traceability::handler::TraceabilityHandler,
 };
+use idem_config::config::{
+    Config, DefaultConfigProvider, FileConfigProvider, ProviderType,
+};
 use idem_handler::exchange::Exchange;
+use idem_handler::factory::HandlerFactory;
 use idem_handler::handler::Handler;
 use idem_handler::status::{HandlerExecutionError, HandlerStatus};
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::Context;
 use std::future::Future;
 use std::pin::Pin;
-use std::str::FromStr;
-use idem_config::config::{Config, ConfigProvider, DefaultConfigProvider, FileConfigProvider, ProviderType};
-use crate::implementation::jwt::handler::JwtValidationHandler;
+use crate::ROOT_CONFIG_PATH;
 
 pub type LambdaExchange = Exchange<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>;
 pub type HandlerOutput<'a> =
@@ -36,98 +39,112 @@ pub enum LambdaHandler {
 }
 
 impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for LambdaHandler {
-    fn process<'i1, 'i2, 'o>(&'i1 self, exchange: &'i2 mut LambdaExchange) -> HandlerOutput<'o>
+    fn exec<'handler, 'exchange, 'result>(
+        &'handler self,
+        exchange: &'exchange mut LambdaExchange,
+    ) -> HandlerOutput<'result>
     where
-        'i1: 'o,
-        'i2: 'o,
-        Self: 'o,
+        'handler: 'result,
+        'exchange: 'result,
+        Self: 'result,
     {
         match self {
-            LambdaHandler::ProxyHandler(handler) => handler.process(exchange),
-            LambdaHandler::CorsHandler(handler) => handler.process(exchange),
-            LambdaHandler::HeaderHandler(handler) => handler.process(exchange),
-            LambdaHandler::TraceabilityHandler(handler) => handler.process(exchange),
-            LambdaHandler::HealthCheckHandler(handler) => handler.process(exchange),
-            LambdaHandler::JwtValidationHandler(handler) => handler.process(exchange),
+            LambdaHandler::ProxyHandler(handler) => handler.exec(exchange),
+            LambdaHandler::CorsHandler(handler) => handler.exec(exchange),
+            LambdaHandler::HeaderHandler(handler) => handler.exec(exchange),
+            LambdaHandler::TraceabilityHandler(handler) => handler.exec(exchange),
+            LambdaHandler::HealthCheckHandler(handler) => handler.exec(exchange),
+            LambdaHandler::JwtValidationHandler(handler) => handler.exec(exchange),
         }
     }
 }
 
 pub struct LambdaHandlerFactory;
-impl LambdaHandlerFactory {
-    pub fn create_handler(name: &str, provider_type: ProviderType) -> Result<LambdaHandler, ()> {
+
+impl HandlerFactory<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>
+    for LambdaHandlerFactory
+{
+    type Err = ();
+    type CreatedHandler = LambdaHandler;
+
+    fn create_handler(
+        name: &str,
+        provider_type: ProviderType,
+    ) -> Result<Self::CreatedHandler, Self::Err> {
         match name {
             "ProxyHandler" => {
-                let config  = match provider_type {
+                let config = match provider_type {
                     ProviderType::File => Config::new(FileConfigProvider {
                         config_name: "proxy.json".into(),
-                        base_path: "/opt/config".into()
+                        base_path: ROOT_CONFIG_PATH.into(),
                     }),
-                    ProviderType::Default => Config::new(DefaultConfigProvider)
+                    ProviderType::Default => Config::new(DefaultConfigProvider),
                 }?;
-                Ok(LambdaHandler::ProxyHandler(LambdaProxyHandler::new(config)))
-            },
+                Ok(LambdaHandler::ProxyHandler(
+                    LambdaProxyHandler::init_handler(config),
+                ))
+            }
             "TraceabilityHandler" => {
                 let config = match provider_type {
-                    ProviderType::File => {
-                        Config::new(FileConfigProvider {
-                            config_name: "trace.json".into(),
-                            base_path: "/opt/config".into()
-                        })
-                    }
-                    ProviderType::Default => Config::new(DefaultConfigProvider)
+                    ProviderType::File => Config::new(FileConfigProvider {
+                        config_name: "trace.json".into(),
+                        base_path: ROOT_CONFIG_PATH.into(),
+                    }),
+                    ProviderType::Default => Config::new(DefaultConfigProvider),
                 }?;
-                Ok(LambdaHandler::TraceabilityHandler(TraceabilityHandler::new(config)))
+                Ok(LambdaHandler::TraceabilityHandler(
+                    TraceabilityHandler::init_handler(config),
+                ))
             }
             "HeaderHandler" => {
                 let config = match provider_type {
-                    ProviderType::File => {
-                        Config::new(FileConfigProvider {
-                            config_name: "header.json".into(),
-                            base_path: "/opt/config".into()
-                        })
-                    }
-                    ProviderType::Default => Config::new(DefaultConfigProvider)
+                    ProviderType::File => Config::new(FileConfigProvider {
+                        config_name: "header.json".into(),
+                        base_path: ROOT_CONFIG_PATH.into(),
+                    }),
+                    ProviderType::Default => Config::new(DefaultConfigProvider),
                 }?;
-                Ok(LambdaHandler::HeaderHandler(HeaderHandler::new(config)))
-            },
+                Ok(LambdaHandler::HeaderHandler(HeaderHandler::init_handler(
+                    config,
+                )))
+            }
             "JwtValidationHandler" => {
                 let config = match provider_type {
-                    ProviderType::File => {
-                        Config::new(FileConfigProvider {
-                            config_name: "jwt_validator.json".into(),
-                            base_path: "/opt/config".into()
-                        })
-                    }
-                    ProviderType::Default => Config::new(DefaultConfigProvider)
+                    ProviderType::File => Config::new(FileConfigProvider {
+                        config_name: "jwt_validator.json".into(),
+                        base_path: ROOT_CONFIG_PATH.into(),
+                    }),
+                    ProviderType::Default => Config::new(DefaultConfigProvider),
                 }?;
-                Ok(LambdaHandler::JwtValidationHandler(JwtValidationHandler::new(config)))
-            },
+                Ok(LambdaHandler::JwtValidationHandler(
+                    JwtValidationHandler::init_handler(config),
+                ))
+            }
             "CorsHandler" => {
                 let config = match provider_type {
-                    ProviderType::File => {
-                        Config::new(FileConfigProvider {
-                            config_name: "cors.json".into(),
-                            base_path: "/opt/config".into()
-                        })
-                    }
-                    ProviderType::Default => Config::new(DefaultConfigProvider)
+                    ProviderType::File => Config::new(FileConfigProvider {
+                        config_name: "cors.json".into(),
+                        base_path: ROOT_CONFIG_PATH.into(),
+                    }),
+                    ProviderType::Default => Config::new(DefaultConfigProvider),
                 }?;
-                Ok(LambdaHandler::CorsHandler(CorsHandler::new(config)))
-            },
+                Ok(LambdaHandler::CorsHandler(CorsHandler::init_handler(
+                    config,
+                )))
+            }
             "HealthHandler" => {
                 let config = match provider_type {
-                    ProviderType::File => {
-                        Config::new(FileConfigProvider {
-                            config_name: "health.json".into(),
-                            base_path: "/opt/config".into()
-                        })
-                    }
-                    ProviderType::Default => Config::new(DefaultConfigProvider)
+                    ProviderType::File => Config::new(FileConfigProvider {
+                        config_name: "health.json".into(),
+                        base_path: ROOT_CONFIG_PATH.into(),
+                    }),
+                    ProviderType::Default => Config::new(DefaultConfigProvider),
                 }?;
-                Ok(LambdaHandler::HealthCheckHandler(HealthCheckHandler::new(config)))
+                Ok(LambdaHandler::HealthCheckHandler(
+                    HealthCheckHandler::init_handler(config),
+                ))
             }
-            |_ => Err(())
+            _ => Err(()),
         }
     }
 }

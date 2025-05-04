@@ -14,7 +14,7 @@ where
     pub fn new(provider: impl ConfigProvider<C>) -> Result<Self, ()> {
         match provider.load() {
             Ok(config) => Ok(Self{config}),
-            Err(_) => todo!("Handle config provider error...")
+            Err(_) => Err(())
         }
     }
 
@@ -57,11 +57,11 @@ where
     fn load(&self) -> Result<C, ()> {
         let file = match File::open(format!("{}{}{}", self.base_path, MAIN_SEPARATOR_STR, self.config_name)) {
             Ok(file) => file,
-            Err(_) => todo!("Handle failing to load configs... (file not found mostly)"),
+            Err(_) => return Err(()),
         };
         match serde_json::from_reader(file) {
             Ok(config) => Ok(config),
-            Err(_) => todo!("handle malformed config data from file...")
+            Err(_) => Err(())
         }
     }
 }

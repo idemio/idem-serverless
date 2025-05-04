@@ -10,15 +10,14 @@ use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayPr
 use lambda_http::http::{HeaderMap, HeaderName, HeaderValue};
 use lambda_http::Context;
 use std::collections::HashMap;
+use idem_macro::ConfigurableHandler;
 
-pub(crate) struct HeaderHandler {
+#[derive(ConfigurableHandler)]
+pub struct HeaderHandler {
     config: Config<HeaderHandlerConfig>,
 }
 
 impl HeaderHandler {
-    pub fn new(config: Config<HeaderHandlerConfig>) -> Self {
-        Self { config }
-    }
 
     fn remove_headers(headers: &mut HeaderMap, remove_headers: Vec<ModifyHeaderKey>) {
         for header in remove_headers {
@@ -39,11 +38,11 @@ impl HeaderHandler {
     }
 }
 
-const REMOVE_RESPONSE_HEADER_ATTACHMENT_KEY: AttachmentKey = AttachmentKey(5);
-const UPDATE_RESPONSE_HEADER_ATTACHMENT_KEY: AttachmentKey = AttachmentKey(6);
+const REMOVE_RESPONSE_HEADER_ATTACHMENT_KEY: AttachmentKey = AttachmentKey("remove_response_headers");
+const UPDATE_RESPONSE_HEADER_ATTACHMENT_KEY: AttachmentKey = AttachmentKey("update_response_headers");
 
 impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for HeaderHandler {
-    fn process<'i1, 'i2, 'o>(&'i1 self, exchange: &'i2 mut LambdaExchange) -> HandlerOutput<'o>
+    fn exec<'i1, 'i2, 'o>(&'i1 self, exchange: &'i2 mut LambdaExchange) -> HandlerOutput<'o>
     where
         'i1: 'o,
         'i2: 'o,

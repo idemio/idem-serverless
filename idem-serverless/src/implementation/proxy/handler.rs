@@ -9,25 +9,24 @@ use idem_handler::status::{Code, HandlerStatus};
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::Context;
 use std::ops::Add;
+use idem_macro::ConfigurableHandler;
 
-pub const FUNCTION_NAME_SEPARATOR: &str = "@";
+const FUNCTION_NAME_SEPARATOR: &str = "@";
 
+#[derive(ConfigurableHandler)]
 pub struct LambdaProxyHandler {
     config: Config<LambdaProxyHandlerConfig>,
 }
 
-impl LambdaProxyHandler {
-    pub fn new(config: Config<LambdaProxyHandlerConfig>) -> Self {
-        Self { config }
-    }
-}
-
 impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for LambdaProxyHandler {
-    fn process<'i1, 'i2, 'o>(&'i1 self, exchange: &'i2 mut LambdaExchange) -> HandlerOutput<'o>
+    fn exec<'handler, 'exchange, 'result>(
+        &'handler self,
+        exchange: &'exchange mut LambdaExchange,
+    ) -> HandlerOutput<'result>
     where
-        'i1: 'o,
-        'i2: 'o,
-        Self: 'o,
+        'handler: 'result,
+        'exchange: 'result,
+        Self: 'result,
     {
         Box::pin(async move {
             let client =
@@ -36,17 +35,23 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for Lambd
                 return Ok(HandlerStatus::new(Code::DISABLED));
             }
 
-            match exchange.consume_request() {
+            match exchange.take_request() {
                 Ok(request) => {
                     let payload = serde_json::to_string(&request).unwrap();
                     let path = match request.path {
                         Some(path) => path,
-                        None => todo!("Handle path not found in request"),
+                        None => {
+                            return Ok(HandlerStatus::new(Code::CLIENT_ERROR)
+                                .set_message("Missing path in request."))
+                        }
                     };
                     let method = request.http_method;
                     let function_key = path.add(FUNCTION_NAME_SEPARATOR).add(method.as_str());
                     let function_name = match self.config.get().functions.get(&function_key) {
-                        None => todo!("Handle no function found matching in configuration"),
+                        None => {
+                            return Ok(HandlerStatus::new(Code::CLIENT_ERROR)
+                                .set_message("No function found for path and method combination."))
+                        }
                         Some(function) => function.clone(),
                     };
                     let proxy_blob = Blob::new(payload);
@@ -59,22 +64,31 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for Lambd
                     {
                         Ok(response) => {
                             if response.function_error().is_some() {
-                                todo!("Handle function failure")
+
+                                return Ok(HandlerStatus::new(Code::SERVER_ERROR)
+                                    .set_message("Lambda function returned an error."));
                             }
 
                             let response_payload_bytes = response.payload.unwrap().into_inner();
                             let lambda_response: ApiGatewayProxyResponse =
-                                serde_json::from_slice(&response_payload_bytes).unwrap_or_else(
-                                    |_| todo!("failed to get response from lambda function call."),
-                                );
+                                match serde_json::from_slice(&response_payload_bytes) {
+                                    Ok(response) => response,
+                                    Err(_) => {
+                                        return Ok(HandlerStatus::new(Code::SERVER_ERROR)
+                                            .set_message(
+                                                "Failed to parse response from Lambda function.",
+                                            ));
+                                    }
+                                };
                             exchange.save_output(lambda_response);
-                            println!("LambdaProxyHandler successfully finished!");
                             Ok(HandlerStatus::new(Code::REQUEST_COMPLETED))
                         }
-                        Err(_) => Ok(HandlerStatus::new(Code::SERVER_ERROR)),
+                        Err(_) => Ok(HandlerStatus::new(Code::SERVER_ERROR)
+                            .set_message("Failed to invoke Lambda function.")),
                     }
                 }
-                Err(_) => Ok(HandlerStatus::new(Code::SERVER_ERROR)),
+                Err(_) => Ok(HandlerStatus::new(Code::SERVER_ERROR)
+                    .set_message("Failed to consume request.")),
             }
         })
     }

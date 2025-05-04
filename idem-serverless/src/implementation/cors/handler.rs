@@ -7,6 +7,7 @@ use idem_handler::status::{Code, HandlerStatus};
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::http::HeaderValue;
 use lambda_http::Context;
+use idem_macro::ConfigurableHandler;
 
 const ORIGIN_HEADER_KEY: &str = "Origin";
 const ACCESS_CONTROL_REQUEST_METHOD: &str = "Access-Control-Request-Method";
@@ -17,14 +18,9 @@ const ACCESS_CONTROL_MAX_AGE: &str = "Access-Control-Max-Age";
 const ACCESS_CONTROL_ALLOW_METHODS: &str = "Access-Control-Allow-Methods";
 const ACCESS_CONTROL_ALLOW_HEADERS: &str = "Access-Control-Allow-Headers";
 
+#[derive(ConfigurableHandler)]
 pub struct CorsHandler {
     config: Config<CorsHandlerConfig>,
-}
-
-impl CorsHandler {
-    pub fn new(config: Config<CorsHandlerConfig>) -> Self {
-        Self { config }
-    }
 }
 
 impl CorsHandler {
@@ -66,14 +62,17 @@ impl CorsHandler {
     }
 }
 
-const ORIGIN_ATTACHMENT_KEY: AttachmentKey = AttachmentKey(4);
+const ORIGIN_ATTACHMENT_KEY: AttachmentKey = AttachmentKey("origin_header_value");
 
 impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for CorsHandler {
-    fn process<'i1, 'i2, 'o>(&'i1 self, exchange: &'i2 mut LambdaExchange) -> HandlerOutput<'o>
+    fn exec<'handler, 'exchange, 'result>(
+        &'handler self,
+        exchange: &'exchange mut LambdaExchange,
+    ) -> HandlerOutput<'result>
     where
-        'i1: 'o,
-        'i2: 'o,
-        Self: 'o,
+        'handler: 'result,
+        'exchange: 'result,
+        Self: 'result,
     {
         Box::pin(async move {
             if !self.config.get().enabled {
@@ -224,9 +223,9 @@ mod test {
         assert_eq!(sanitized_url, "http://[2001:db8:4006:812::200e]");
     }
 
-//    // TODO - test cors functionality using tokio test: https://tokio.rs/tokio/topics/testing
-//    #[tokio::test]
-//    async fn test_cors_handler() {
-//        let mut cors_handler_config = CorsHandlerConfig::default();
-//    }
+    //    // TODO - test cors functionality using tokio test: https://tokio.rs/tokio/topics/testing
+    //    #[tokio::test]
+    //    async fn test_cors_handler() {
+    //        let mut cors_handler_config = CorsHandlerConfig::default();
+    //    }
 }

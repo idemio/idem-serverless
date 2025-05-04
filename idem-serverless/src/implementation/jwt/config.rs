@@ -5,6 +5,9 @@ use crate::implementation::jwt::jwk_provider::JwkProviders;
 pub struct JwtValidationHandlerConfig {
     pub enabled: bool,
     pub jwk_provider: JwkProviders,
+    pub scope_verification: bool,
+    pub specification_name: String,
+    pub ignore_jwt_expiration: bool,
     pub audience: String,
 
 }
@@ -14,6 +17,9 @@ impl Default for JwtValidationHandlerConfig {
         Self {
             enabled: true,
             jwk_provider: JwkProviders::default(),
+            scope_verification: false,
+            ignore_jwt_expiration: false,
+            specification_name: "openapi.yaml".to_string(),
             audience: "https://issuer.example.com".to_string(),
         }
     }
@@ -29,6 +35,9 @@ mod test {
         let file = r#"
         {
             "enabled": true,
+            "scope_verification": false,
+            "ignore_jwt_expiration": false,
+            "specification_name": "openapi.yaml",
             "jwk_provider": {
                 "LocalJwkProvider": {
                     "file_name": "jwks.json",

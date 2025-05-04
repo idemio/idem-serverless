@@ -1,6 +1,6 @@
-use std::fs::File;
 use jsonwebtoken::jwk::JwkSet;
 use serde::Deserialize;
+use idem_config::config_cache::get_file;
 
 pub trait JwkProvider {
     fn jwk(&self) -> Result<JwkSet, ()>;
@@ -9,42 +9,39 @@ pub trait JwkProvider {
 #[derive(Deserialize, Default)]
 pub struct LocalJwkProvider {
     file_name: String,
-    file_path: String
+    file_path: String,
 }
 
 impl JwkProvider for LocalJwkProvider {
     fn jwk(&self) -> Result<JwkSet, ()> {
-
-        let file = match File::open(format!("{}/{}", self.file_path, self.file_name)) {
-            Ok(f) => f,
-            Err(e) => {
-                println!("JWKs file does not exist: {}", e);
-                return Err(())
-            }
-        };
-        serde_json::from_reader(file).or(Err(()))
+        let file = get_file(&format!("{}/{}", self.file_path, self.file_name)).unwrap();
+        serde_json::from_str(&file).or(Err(()))
     }
 }
 
 #[derive(Deserialize, Default)]
 pub struct RemoteJwkProvider {
     jwk_server_url: String,
-    jwk_server_path: String
+    jwk_server_path: String,
 }
 
+impl JwkProvider for RemoteJwkProvider {
+    fn jwk(&self) -> Result<JwkSet, ()> {
+        todo!()
+    }
+}
 
 #[derive(Deserialize)]
 pub enum JwkProviders {
-
-    // TODO - implement remote and other types
-    LocalJwkProvider(LocalJwkProvider)
+    RemoteJwkProvider(RemoteJwkProvider),
+    LocalJwkProvider(LocalJwkProvider),
 }
 
 impl Default for JwkProviders {
     fn default() -> Self {
-        Self::LocalJwkProvider(LocalJwkProvider{
+        Self::LocalJwkProvider(LocalJwkProvider {
             file_name: String::from("jwks.json"),
-            file_path: String::from("./config")
+            file_path: String::from("./config"),
         })
     }
 }
@@ -53,6 +50,8 @@ impl JwkProvider for JwkProviders {
     fn jwk(&self) -> Result<JwkSet, ()> {
         match self {
             JwkProviders::LocalJwkProvider(local) => local.jwk(),
+
+            JwkProviders::RemoteJwkProvider(remote) => remote.jwk(),
         }
     }
 }

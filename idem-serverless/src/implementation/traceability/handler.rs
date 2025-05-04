@@ -7,15 +7,14 @@ use idem_handler::status::{Code, HandlerStatus};
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::http::{HeaderMap, HeaderName, HeaderValue};
 use lambda_http::{tracing, Context};
+use idem_macro::ConfigurableHandler;
 
+#[derive(ConfigurableHandler)]
 pub struct TraceabilityHandler {
     config: Config<TraceabilityHandlerConfig>,
 }
 
 impl TraceabilityHandler {
-    pub fn new(config: Config<TraceabilityHandlerConfig>) -> Self {
-        Self { config }
-    }
 
     fn find_or_create_uuid(
         headers: &HeaderMap,
@@ -41,21 +40,23 @@ impl TraceabilityHandler {
     }
 }
 
-const TRACE_V_ATTACHMENT_KEY: AttachmentKey = AttachmentKey(7);
-const CORR_V_ATTACHMENT_KEY: AttachmentKey = AttachmentKey(8);
-const CORR_H_ATTACHMENT_KEY: AttachmentKey = AttachmentKey(9);
-const TRACE_H_ATTACHMENT_KEY: AttachmentKey = AttachmentKey(10);
+const TRACE_V_ATTACHMENT_KEY: AttachmentKey = AttachmentKey("trace_v");
+const CORR_V_ATTACHMENT_KEY: AttachmentKey = AttachmentKey("corr_v");
+const CORR_H_ATTACHMENT_KEY: AttachmentKey = AttachmentKey("corr_h");
+const TRACE_H_ATTACHMENT_KEY: AttachmentKey = AttachmentKey("trace_h");
 
 impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for TraceabilityHandler {
-    fn process<'i1, 'i2, 'o>(&'i1 self, exchange: &'i2 mut LambdaExchange) -> HandlerOutput<'o>
+    fn exec<'handler, 'exchange, 'result>(
+        &'handler self,
+        exchange: &'exchange mut LambdaExchange,
+    ) -> HandlerOutput<'result>
     where
-        'i1: 'o,
-        'i2: 'o,
-        Self: 'o,
+        'handler: 'result,
+        'exchange: 'result,
+        Self: 'result,
     {
         tracing::debug!("Traceability handler starts");
         Box::pin(async move {
-
             if !self.config.get().enabled {
                 return Ok(HandlerStatus::new(Code::DISABLED));
             }

@@ -5,13 +5,15 @@ use idem_handler::handler::Handler;
 use idem_handler::status::{Code, HandlerStatus};
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::{Body, Context};
+use idem_macro::ConfigurableHandler;
 
+#[derive(ConfigurableHandler)]
 pub struct EchoRequestHandler {
     config: Config<EchoRequestHandlerConfig>,
 }
 
 impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for EchoRequestHandler {
-    fn process<'i1, 'i2, 'o>(&'i1 self, exchange: &'i2 mut LambdaExchange) -> HandlerOutput<'o>
+    fn exec<'i1, 'i2, 'o>(&'i1 self, exchange: &'i2 mut LambdaExchange) -> HandlerOutput<'o>
     where
         'i1: 'o,
         'i2: 'o,
@@ -22,7 +24,7 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for EchoR
                 return Ok(HandlerStatus::new(Code::DISABLED));
             }
 
-            let request_payload = exchange.consume_request().unwrap();
+            let request_payload = exchange.take_request().unwrap();
             let echo_body: Option<Body> = if self.config.get().static_body.is_some() {
                 match self.config.get().static_body.as_ref() {
                     Some(x) if !x.is_empty() => Some(Body::Text(x.clone())),

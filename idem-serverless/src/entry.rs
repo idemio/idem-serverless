@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use crate::implementation::{LambdaHandlerExecutor, LambdaHandlerFactory};
+use crate::implementation::{LambdaExchange, LambdaHandlerExecutor, LambdaHandlerFactory};
 use idem_config::config::{ ProviderType};
 use idem_handler::exchange::Exchange;
 use idem_handler::handler::Handler;
@@ -85,6 +85,3 @@ pub async fn entry(
         path, method
     )))
 }
-
-
-pub type LambdaExchange = Exchange<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>;

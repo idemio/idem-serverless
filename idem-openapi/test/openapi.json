@@ -13,29 +13,37 @@
       "url": "http://www.apache.org/licenses/LICENSE-2.0.html"
     }
   },
-  "servers": [{
-    "url": "http://petstore.swagger.io/v2"
-  }],
-  "tags": [{
-    "name": "pet",
-    "description": "Everything about your Pets",
-    "externalDocs": {
-      "description": "Find out more",
-      "url": "http://swagger.io"
+  "servers": [
+    {
+      "url": "http://petstore.swagger.io/v2"
     }
-  }],
+  ],
+  "tags": [
+    {
+      "name": "pet",
+      "description": "Everything about your Pets",
+      "externalDocs": {
+        "description": "Find out more",
+        "url": "http://swagger.io"
+      }
+    }
+  ],
   "paths": {
     "/pet/findById/{pet_id}": {
       "get": {
-        "tags": ["pet"],
+        "tags": [
+          "pet"
+        ],
         "summary": "Finds Pets by id",
         "operationId": "findPetById",
-        "produces": ["application/json"],
+        "produces": [
+          "application/json"
+        ],
         "parameters": [
           {
             "name": "pet_id",
             "in": "path",
-            "required":true,
+            "required": true,
             "schema": {
               "type": "integer"
             }
@@ -61,38 +69,45 @@
                   "Example 1": {
                     "summary": "Example response showing a regular response",
                     "description": "Two pets are returned in this example.",
-                    "value": [{
-                      "id": 1,
-                      "category": {
+                    "value": [
+                      {
                         "id": 1,
-                        "name": "cat"
+                        "category": {
+                          "id": 1,
+                          "name": "cat"
+                        },
+                        "name": "fluffy",
+                        "photoUrls": [
+                          "http://example.com/path/to/cat/1.jpg",
+                          "http://example.com/path/to/cat/2.jpg"
+                        ],
+                        "tags": [
+                          {
+                            "id": 1,
+                            "name": "cat"
+                          }
+                        ],
+                        "status": "available"
                       },
-                      "name": "fluffy",
-                      "photoUrls": [
-                        "http://example.com/path/to/cat/1.jpg",
-                        "http://example.com/path/to/cat/2.jpg"
-                      ],
-                      "tags": [{
-                        "id": 1,
-                        "name": "cat"
-                      }],
-                      "status": "available"
-                    }, {
-                      "id": 2,
-                      "category": {
+                      {
                         "id": 2,
-                        "name": "dog"
-                      },
-                      "name": "puppy",
-                      "photoUrls": [
-                        "http://example.com/path/to/dog/1.jpg"
-                      ],
-                      "tags": [{
-                        "id": 2,
-                        "name": "dog"
-                      }],
-                      "status": "available"
-                    }]
+                        "category": {
+                          "id": 2,
+                          "name": "dog"
+                        },
+                        "name": "puppy",
+                        "photoUrls": [
+                          "http://example.com/path/to/dog/1.jpg"
+                        ],
+                        "tags": [
+                          {
+                            "id": 2,
+                            "name": "dog"
+                          }
+                        ],
+                        "status": "available"
+                      }
+                    ]
                   }
                 }
               }
@@ -102,46 +117,62 @@
             "description": "Invalid status value"
           }
         },
-        "security": [{
-          "petstore_auth": ["write:pets", "read:pets"]
-        }]
+        "security": [
+          {
+            "petstore_auth": [
+              "write:pets",
+              "read:pets"
+            ]
+          }
+        ]
       }
     },
     "/pet/findByStatus/MultipleExamples": {
       "get": {
-        "tags": ["pet"],
+        "tags": [
+          "pet"
+        ],
         "summary": "Finds Pets by status",
         "description": "Multiple status values can be provided with comma separated strings",
         "operationId": "findPetsByStatus",
-        "produces": ["application/xml", "application/json"],
-        "parameters": [{
-          "name": "status",
-          "in": "query",
-          "description": "Status values that need to be considered for filter",
-          "required": true,
-          "schema": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "enum": ["available", "pending", "sold"],
-              "default": "available"
-            }
-          },
-          "style": "form",
-          "explode": true,
-          "examples": {
-            "Available": {
-              "summary": "Available",
-              "description": "Showing status of `available`, using `value` property",
-              "value": "available"
+        "produces": [
+          "application/xml",
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Status values that need to be considered for filter",
+            "required": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "available",
+                  "pending",
+                  "sold"
+                ],
+                "default": "available"
+              }
             },
-            "Sold": {
-              "summary": "Sold",
-              "description": "Showing status of `sold`, using `externalValue` property",
-              "externalValue": "http://example.com/examples/dog.json"
+            "style": "form",
+            "explode": true,
+            "examples": {
+              "Available": {
+                "summary": "Available",
+                "description": "Showing status of `available`, using `value` property",
+                "value": "available"
+              },
+              "Sold": {
+                "summary": "Sold",
+                "description": "Showing status of `sold`, using `externalValue` property",
+                "externalValue": "http://example.com/examples/dog.json"
+              }
             }
           }
-        }],
+        ],
         "responses": {
           "200": {
             "description": "successful operation",
@@ -162,38 +193,45 @@
                   "Example 1": {
                     "summary": "Example response showing a regular response",
                     "description": "Two pets are returned in this example.",
-                    "value": [{
-                      "id": 1,
-                      "category": {
+                    "value": [
+                      {
                         "id": 1,
-                        "name": "cat"
+                        "category": {
+                          "id": 1,
+                          "name": "cat"
+                        },
+                        "name": "fluffy",
+                        "photoUrls": [
+                          "http://example.com/path/to/cat/1.jpg",
+                          "http://example.com/path/to/cat/2.jpg"
+                        ],
+                        "tags": [
+                          {
+                            "id": 1,
+                            "name": "cat"
+                          }
+                        ],
+                        "status": "available"
                       },
-                      "name": "fluffy",
-                      "photoUrls": [
-                        "http://example.com/path/to/cat/1.jpg",
-                        "http://example.com/path/to/cat/2.jpg"
-                      ],
-                      "tags": [{
-                        "id": 1,
-                        "name": "cat"
-                      }],
-                      "status": "available"
-                    }, {
-                      "id": 2,
-                      "category": {
+                      {
                         "id": 2,
-                        "name": "dog"
-                      },
-                      "name": "puppy",
-                      "photoUrls": [
-                        "http://example.com/path/to/dog/1.jpg"
-                      ],
-                      "tags": [{
-                        "id": 2,
-                        "name": "dog"
-                      }],
-                      "status": "available"
-                    }]
+                        "category": {
+                          "id": 2,
+                          "name": "dog"
+                        },
+                        "name": "puppy",
+                        "photoUrls": [
+                          "http://example.com/path/to/dog/1.jpg"
+                        ],
+                        "tags": [
+                          {
+                            "id": 2,
+                            "name": "dog"
+                          }
+                        ],
+                        "status": "available"
+                      }
+                    ]
                   }
                 }
               }
@@ -203,39 +241,55 @@
             "description": "Invalid status value"
           }
         },
-        "security": [{
-          "petstore_auth": ["write:pets", "read:pets"]
-        }]
+        "security": [
+          {
+            "petstore_auth": [
+              "write:pets",
+              "read:pets"
+            ]
+          }
+        ]
       }
     },
     "/pet/findByStatus/singleExample": {
       "get": {
-        "tags": ["pet"],
+        "tags": [
+          "pet"
+        ],
         "summary": "Finds Pets by status",
         "description": "Multiple status values can be provided with comma separated strings",
         "operationId": "findPetsByStatus",
-        "produces": ["application/xml", "application/json"],
-        "parameters": [{
-          "name": "status",
-          "in": "query",
-          "description": "Status values that need to be considered for filter",
-          "required": true,
-          "schema": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "enum": ["available", "pending", "sold"],
-              "default": "available"
+        "produces": [
+          "application/xml",
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Status values that need to be considered for filter",
+            "required": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "available",
+                  "pending",
+                  "sold"
+                ],
+                "default": "available"
+              }
+            },
+            "style": "form",
+            "explode": true,
+            "example": {
+              "summary": "Available",
+              "description": "Showing status of `available`, using `value` property",
+              "value": "available"
             }
-          },
-          "style": "form",
-          "explode": true,
-          "example": {
-            "summary": "Available",
-            "description": "Showing status of `available`, using `value` property",
-            "value": "available"
           }
-        }],
+        ],
         "responses": {
           "200": {
             "description": "successful operation",
@@ -250,38 +304,45 @@
                 "example": {
                   "summary": "Example response showing a regular response",
                   "description": "Two pets are returned in this example.",
-                  "value": [{
-                    "id": 1,
-                    "category": {
+                  "value": [
+                    {
                       "id": 1,
-                      "name": "cat"
+                      "category": {
+                        "id": 1,
+                        "name": "cat"
+                      },
+                      "name": "fluffy",
+                      "photoUrls": [
+                        "http://example.com/path/to/cat/1.jpg",
+                        "http://example.com/path/to/cat/2.jpg"
+                      ],
+                      "tags": [
+                        {
+                          "id": 1,
+                          "name": "cat"
+                        }
+                      ],
+                      "status": "available"
                     },
-                    "name": "fluffy",
-                    "photoUrls": [
-                      "http://example.com/path/to/cat/1.jpg",
-                      "http://example.com/path/to/cat/2.jpg"
-                    ],
-                    "tags": [{
-                      "id": 1,
-                      "name": "cat"
-                    }],
-                    "status": "available"
-                  }, {
-                    "id": 2,
-                    "category": {
+                    {
                       "id": 2,
-                      "name": "dog"
-                    },
-                    "name": "puppy",
-                    "photoUrls": [
-                      "http://example.com/path/to/dog/1.jpg"
-                    ],
-                    "tags": [{
-                      "id": 2,
-                      "name": "dog"
-                    }],
-                    "status": "available"
-                  }]
+                      "category": {
+                        "id": 2,
+                        "name": "dog"
+                      },
+                      "name": "puppy",
+                      "photoUrls": [
+                        "http://example.com/path/to/dog/1.jpg"
+                      ],
+                      "tags": [
+                        {
+                          "id": 2,
+                          "name": "dog"
+                        }
+                      ],
+                      "status": "available"
+                    }
+                  ]
                 }
               }
             }
@@ -290,14 +351,21 @@
             "description": "Invalid status value"
           }
         },
-        "security": [{
-          "petstore_auth": ["write:pets", "read:pets"]
-        }]
+        "security": [
+          {
+            "petstore_auth": [
+              "write:pets",
+              "read:pets"
+            ]
+          }
+        ]
       }
     },
     "/pet": {
       "post": {
-        "tags": ["pet"],
+        "tags": [
+          "pet"
+        ],
         "summary": "Add a new pet to the store",
         "description": "",
         "operationId": "addPet",
@@ -324,33 +392,39 @@
                       "http://example.com/path/to/cat/1.jpg",
                       "http://example.com/path/to/cat/2.jpg"
                     ],
-                    "tags": [{
-                      "id": 1,
-                      "name": "cat"
-                    }],
+                    "tags": [
+                      {
+                        "id": 1,
+                        "name": "cat"
+                      }
+                    ],
                     "status": "available"
                   }
                 },
                 "Cat2": {
                   "summary": "An example of cat",
                   "description": "An example of cat, using `value` property, which value is an array",
-                  "value": [{
-                    "id": 1,
-                    "category": {
+                  "value": [
+                    {
                       "id": 1,
-                      "name": "cat"
-                    },
-                    "name": "fluffy",
-                    "photoUrls": [
-                      "http://example.com/path/to/cat/1.jpg",
-                      "http://example.com/path/to/cat/2.jpg"
-                    ],
-                    "tags": [{
-                      "id": 1,
-                      "name": "cat"
-                    }],
-                    "status": "available"
-                  }]
+                      "category": {
+                        "id": 1,
+                        "name": "cat"
+                      },
+                      "name": "fluffy",
+                      "photoUrls": [
+                        "http://example.com/path/to/cat/1.jpg",
+                        "http://example.com/path/to/cat/2.jpg"
+                      ],
+                      "tags": [
+                        {
+                          "id": 1,
+                          "name": "cat"
+                        }
+                      ],
+                      "status": "available"
+                    }
+                  ]
                 },
                 "Dog": {
                   "summary": "An example of dog",
@@ -420,7 +494,10 @@
       },
       "Pet": {
         "type": "object",
-        "required": ["name", "photoUrls"],
+        "required": [
+          "name",
+          "photoUrls"
+        ],
         "properties": {
           "id": {
             "type": "integer",
@@ -456,11 +533,30 @@
           "status": {
             "type": "string",
             "description": "pet status in the store",
-            "enum": ["available", "pending", "sold"]
+            "enum": [
+              "available",
+              "pending",
+              "sold"
+            ]
           }
         },
         "xml": {
           "name": "Pet"
+        }
+      }
+    },
+    "securitySchemes": {
+      "petstore_auth": {
+        "type": "oauth2",
+        "description": "My example client credential flow",
+        "flows": {
+          "clientCredentials": {
+            "tokenUrl": "https://api.example/oauth2/someid/token",
+            "scopes": {
+              "read:pets": "My read scope",
+              "write:pets": "My write scope"
+            }
+          }
         }
       }
     }

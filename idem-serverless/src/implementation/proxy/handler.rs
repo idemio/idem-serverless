@@ -1,6 +1,5 @@
-use crate::entry::LambdaExchange;
 use crate::implementation::proxy::config::LambdaProxyHandlerConfig;
-use crate::implementation::{Handler, HandlerOutput};
+use crate::implementation::{Handler, HandlerOutput, LambdaExchange};
 use aws_config::BehaviorVersion;
 use aws_sdk_lambda::primitives::Blob;
 use aws_sdk_lambda::Client as LambdaClient;

@@ -13,11 +13,10 @@ use jsonwebtoken::jwk::{AlgorithmParameters, JwkSet};
 use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation};
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::Context;
-use oas3::OpenApiV3Spec;
 use oas3::spec::PathItem;
 use serde_json::Value;
 use idem_config::config_cache::get_file;
-use idem_handler::exchange::ExchangeError;
+use idem_openapi::OpenApiValidator;
 use crate::ROOT_CONFIG_PATH;
 
 #[derive(ConfigurableHandler)]
@@ -30,23 +29,14 @@ impl JwtValidationHandler {
         self.config.get().jwk_provider.jwk()
     }
 
-    fn find_matching_path(request_path: &str, paths: BTreeMap<String, PathItem>) {
-        paths.iter().find(|(path, _)| *path == request_path);
-        todo!()
-    }
 
-    fn validate_scope(&self, request_path: &str, claims: &Value) -> Result<(), ()> {
-        let spec_file  = get_file(&format!("{}/{}", ROOT_CONFIG_PATH, self.config.get().specification_name)).unwrap();
-        let spec_file: &str = &spec_file;
-        let parsed_spec = match oas3::from_yaml(spec_file) {
-            Ok(out) => out,
-            Err(_) => return Err(())
-        };
-
-        let paths = parsed_spec.paths.unwrap();
-        let matching_path = Self::find_matching_path(request_path, paths);
-
-        Ok(())
+    fn validate_scope(&self, request_path: &str, method: &str, claims: &Value) -> Result<(), ()> {
+        let spec_validator = OpenApiValidator::from_file(&format!("{}/{}", ROOT_CONFIG_PATH, "openapi.json"))?;
+        let scopes = spec_validator.get_scopes_for_path(request_path, method);
+        if scopes.iter().any(|scope| scope == &claims["scope"].as_str().unwrap()) {
+            return Ok(());
+        }
+        Err(())
     }
 
     fn validate_aud(&self, claims: &Value) -> Result<(), ()> {
@@ -159,12 +149,13 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for JwtVa
                 };
 
                 let claims = token_data.claims;
-                let request_path = match &request.path {
-                    None => return Ok(HandlerStatus::new(Code::CLIENT_ERROR).set_message("Missing request path")),
-                    Some(val) => val
+                let (request_path, method) = match (&request.path, &request.http_method) {
+                    (None, _) => return Ok(HandlerStatus::new(Code::CLIENT_ERROR).set_message("Missing request path")),
+                    (Some(path), method) => (path,method)
                 };
+
                 if self.config.get().scope_verification {
-                    if let Err(_) = self.validate_scope(&request_path, &claims) {
+                    if let Err(_) = self.validate_scope(&request_path, &method.to_string(), &claims) {
                         return Ok(HandlerStatus::new(Code::CLIENT_ERROR)
                             .set_message("Invalid scope for token"));
                     }

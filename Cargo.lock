@@ -1413,6 +1413,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "idem-openapi"
+version = "0.1.0"
+dependencies = [
+ "idem-config",
+ "oas3",
+ "regex",
+ "serde_json",
+]
+
+[[package]]
 name = "idem-serverless"
 version = "0.1.0"
 dependencies = [
@@ -1422,6 +1432,7 @@ dependencies = [
  "idem-config",
  "idem-handler",
  "idem-macro",
+ "idem-openapi",
  "jsonwebtoken",
  "lambda_http",
  "oas3",

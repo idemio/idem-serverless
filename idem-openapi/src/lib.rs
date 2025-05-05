@@ -6,7 +6,7 @@ use oas3::spec::{
     SchemaTypeSet,
 };
 use oas3::{OpenApiV3Spec, Spec};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 
 pub struct OpenApiValidator {
@@ -37,47 +37,6 @@ impl OpenApiValidator {
         Self { specification }
     }
 
-    fn get_param_value(
-        &self,
-        param_name: &str,
-        endpoint_params: &Vec<ObjectOrReference<Parameter>>,
-    ) -> Option<Parameter> {
-        for param_or_ref in endpoint_params {
-            match param_or_ref.resolve(&self.specification) {
-                Ok(param) => {
-                    if param.name == param_name {
-                        return Some(param.clone());
-                    }
-                }
-                Err(_) => continue,
-            }
-        }
-        None
-    }
-
-    /// Validates a JSON value against the specified schema type and related rules.
-    ///
-    /// This function dispatches the validation of a given value based on its type, utilizing
-    /// specific validation functions for each schema type (e.g., boolean, integer, string, etc.).
-    ///
-    /// # Parameters
-    /// - `value`: The JSON value to validate (`&Value`).
-    /// - `type_val`: The schema type to validate against (`&SchemaType`).
-    /// - `schema`: The `ObjectSchema` containing the constraints and rules for validation.
-    /// - `spec`: The `Spec` used for resolving schema references and performing additional validation for complex types.
-    ///
-    /// # Returns
-    /// - `true`: If the value matches the specified schema type and satisfies all associated rules.
-    /// - `false`: If the value does not match the schema type or violates any associated rules.
-    ///
-    /// # Supported Schema Types
-    /// - **Boolean**: Validates against boolean-specific rules.
-    /// - **Integer**: Validates an integer value, including type and constraints checks.
-    /// - **Number**: Validates a numeric value, including type and constraints checks.
-    /// - **String**: Validates a string value, including type and format checks.
-    /// - **Array**: Validates an array and its elements based on schema rules.
-    /// - **Object**: Validates an object, including required fields and property validations.
-    /// - **Null**: Validates if the value is null.
     fn validate_for_type(
         value: &Value,
         type_val: &SchemaType,
@@ -95,29 +54,6 @@ impl OpenApiValidator {
         }
     }
 
-    /// Validates a string value against a specified format.
-    ///
-    /// This function checks if a given string matches one of the predefined formats such as
-    /// date, date-time, email, IPv4, IPv6, or UUID, based on regular expression patterns.
-    ///
-    /// # Parameters
-    /// - `string_value`: The string value to validate.
-    /// - `format`: The format type to validate against (e.g., `date`, `date-time`, `email`, `ipv4`, `ipv6`, `uuid`).
-    ///
-    /// # Returns
-    /// - `true`: If the string matches the specified format.
-    /// - `false`: If the string does not match the specified format or if the format is unknown.
-    ///
-    /// # Supported Formats
-    /// - **DATE**: Matches a date in the format `YYYY-MM-DD`.
-    /// - **DATE_TIME**: Matches a full date-time string in the format `YYYY-MM-DDTHH:MM:SS` (e.g., ISO 8601).
-    /// - **EMAIL**: Matches a valid email address.
-    /// - **IPV4**: Matches a valid IPv4 address.
-    /// - **IPV6**: Matches a valid IPv6 address.
-    /// - **UUID**: Matches a valid UUID string.
-    ///
-    /// # Behavior
-    /// If an unknown format is provided, the function logs a warning and returns `false`
     pub fn validate_string_format(string_value: &str, format: &str) -> bool {
         match format {
             constants::format::DATE => regex::Regex::new(constants::pattern::DATE_REGEX)
@@ -143,36 +79,15 @@ impl OpenApiValidator {
         todo!("implement number formats!")
     }
 
-    /// Validates a string value against the rules defined in the given schema.
-    ///
-    /// This function checks whether the provided string value complies with various constraints
-    /// specified in the `ObjectSchema`, such as maximum length, minimum length, pattern matching,
-    /// and format validation.
-    ///
-    /// # Parameters
-    /// - `value`: The value to validate, expected to be a JSON string (`&Value`).
-    /// - `schema`: The `ObjectSchema` containing the constraints to validate against.
-    ///
-    /// # Returns
-    /// - `true`: If the string value meets all the constraints defined in the schema.
-    /// - `false`: If the value does not satisfy any of the constraints or is not a string.
-    ///
-    /// # Validation Rules
-    /// - **Maximum Length (`max_length`)**: Ensures the string does not exceed the maximum length.
-    /// - **Minimum Length (`min_length`)**: Ensures the string meets the minimum length requirement.
-    /// - **Pattern (`pattern`)**: Validates the string against a regular expression.
-    /// - **Format (`format`)**: Validates the string format using predefined format rules (e.g., email, date).
     fn validate_string_rules(value: &Value, schema: &ObjectSchema) -> bool {
         if let Some(str_val) = value.as_str() {
             if let Some(max) = &schema.max_length {
-                println!("Checking if value {} follows max length: {}", str_val, max);
                 if *max < str_val.len() as u64 {
                     return false;
                 }
             }
 
             if let Some(min) = &schema.min_length {
-                println!("Checking if value {} follows min length: {}", str_val, min);
                 if *min > str_val.len() as u64 {
                     return false;
                 }
@@ -180,7 +95,6 @@ impl OpenApiValidator {
 
             if let Some(pattern) = &schema.pattern {
                 if let Ok(pattern) = regex::Regex::new(pattern) {
-                    println!("Checking if value {} follows pattern: {}", str_val, pattern);
                     if !pattern.is_match(str_val) {
                         return false;
                     }
@@ -188,7 +102,6 @@ impl OpenApiValidator {
             }
 
             if let Some(format) = &schema.format {
-                println!("Checking if value {} follows format: {}", str_val, format);
                 if !Self::validate_string_format(str_val, format) {
                     return false;
                 }
@@ -199,76 +112,64 @@ impl OpenApiValidator {
         false
     }
 
-    /// Validates an integer value against the rules defined in the given schema.
-    ///
-    /// This function ensures that the provided integer value adheres to constraints
-    /// such as maximum, minimum, exclusivity of bounds, multiples, and specific formats
-    /// as defined in the `ObjectSchema`.
-    ///
-    /// # Parameters
-    /// - `value`: The value to validate, expected to be a JSON integer (`&Value`).
-    /// - `schema`: The `ObjectSchema` containing the constraints to validate against.
-    ///
-    /// # Returns
-    /// - `true`: If the integer value satisfies all the constraints defined in the schema.
-    /// - `false`: If the value does not meet any of the constraints or is not an integer.
-    ///
-    /// # Validation Rules
-    /// - **Maximum (`maximum`)**: Ensures the integer does not exceed the maximum value.
-    /// - **Minimum (`minimum`)**: Ensures the integer meets the minimum value.
-    /// - **Exclusive Maximum (`exclusiveMaximum`)**: Ensures the integer is strictly less than the maximum value.
-    /// - **Exclusive Minimum (`exclusiveMinimum`)**: Ensures the integer is strictly greater than the minimum value.
-    /// - **Multiple Of (`multipleOf`)**: Ensures the integer is a multiple of the specified value.
-    /// - **Format (`format`)**: Validates the integer using predefined format rules.
+    fn value_is_in_enum(value: &Value, enum_values: &Vec<Value>) -> bool {
+        enum_values.iter().any(|enum_value| enum_value == value)
+    }
+
     fn validate_integer_rules(value: &Value, schema: &ObjectSchema) -> bool {
         if let Some(int_val) = value.as_i64() {
-            let int_val: i64 = int_val;
-            if let Some(max_int) = schema.maximum.as_ref().and_then(|v| v.as_i64()) {
-                println!("Checking if value {} follows maximum: {}", int_val, max_int);
-                if int_val > max_int {
+            if !schema.enum_values.is_empty() {
+                if !Self::value_is_in_enum(value, &schema.enum_values) {
                     return false;
                 }
             }
 
-            if let Some(min_int) = schema.minimum.as_ref().and_then(|v| v.as_i64()) {
-                println!("Checking if value {} follows minimum: {}", int_val, min_int);
-                if int_val < min_int {
-                    return false;
-                }
+            if schema
+                .maximum
+                .as_ref()
+                .and_then(|v| v.as_i64())
+                .map_or(false, |max_int| int_val > max_int)
+            {
+                return false;
             }
 
-            if let Some(exl_max_int) = schema.exclusive_maximum.as_ref().and_then(|v| v.as_i64()) {
-                println!(
-                    "Checking if value {} follows exclusive maximum: {}",
-                    int_val, exl_max_int
-                );
-                if int_val >= exl_max_int {
-                    return false;
-                }
+            if schema
+                .minimum
+                .as_ref()
+                .and_then(|v| v.as_i64())
+                .map_or(false, |min_int| int_val < min_int)
+            {
+                return false;
             }
 
-            if let Some(exl_min_int) = schema.exclusive_minimum.as_ref().and_then(|v| v.as_i64()) {
-                println!(
-                    "Checking if value {} follows exclusive minimum: {}",
-                    int_val, exl_min_int
-                );
-                if int_val <= exl_min_int {
-                    return false;
-                }
+            if schema
+                .exclusive_maximum
+                .as_ref()
+                .and_then(|v| v.as_i64())
+                .map_or(false, |exclusive_max| int_val >= exclusive_max)
+            {
+                return false;
             }
 
-            if let Some(multiple_of) = schema.multiple_of.as_ref().and_then(|v| v.as_i64()) {
-                println!(
-                    "Checking if value {} is multiple of: {}",
-                    int_val, multiple_of
-                );
-                if int_val % multiple_of != 0 {
-                    return false;
-                }
+            if schema
+                .exclusive_minimum
+                .as_ref()
+                .and_then(|v| v.as_i64())
+                .map_or(false, |exclusive_min| int_val <= exclusive_min)
+            {
+                return false;
+            }
+
+            if schema
+                .multiple_of
+                .as_ref()
+                .and_then(|v| v.as_i64())
+                .map_or(false, |multiple_0f| int_val % multiple_0f != 0)
+            {
+                return false;
             }
 
             if let Some(format) = &schema.format {
-                println!("Checking if value {} follows format: {}", int_val, format);
                 if !Self::validate_number_format(value, format) {
                     return false;
                 }
@@ -279,38 +180,26 @@ impl OpenApiValidator {
         false
     }
 
-    /// Validates an array value against the rules defined in the given schema.
-    ///
-    /// This function ensures that the provided array value complies with various constraints
-    /// defined in the `ObjectSchema`, such as the number of items, uniqueness, and item validation
-    /// against a schema.
-    ///
-    /// # Parameters
-    /// - `value`: The value to validate, expected to be a JSON array (`&Value`).
-    /// - `schema`: The `ObjectSchema` containing the constraints to validate against.
-    /// - `spec`: The `Spec` used for resolving schema references and performing additional validation.
-    ///
-    /// # Returns
-    /// - `true`: If the array value adheres to all the constraints defined in the schema.
-    /// - `false`: If the value does not satisfy any of the constraints or is not an array.
-    ///
-    /// # Validation Rules
-    /// - **Maximum Items (`max_items`)**: Ensures the array does not contain more than the specified number of items.
-    /// - **Minimum Items (`min_items`)**: Ensures the array contains at least the specified number of items.
-    /// - **Unique Items (`unique_items`)**: Ensures all elements in the array are unique if this constraint is specified.
-    /// - **Item Schema (`items`)**: Validates each element in the array against the defined item schema.
     fn validate_array_rules(value: &Value, schema: &ObjectSchema, spec: &Spec) -> bool {
         if let Some(array_val) = value.as_array() {
-            if let Some(max_items) = schema.max_items {
-                if array_val.len() > max_items as usize {
+            if !schema.enum_values.is_empty() {
+                if !Self::value_is_in_enum(value, &schema.enum_values) {
                     return false;
                 }
             }
 
-            if let Some(min_items) = schema.min_items {
-                if array_val.len() < min_items as usize {
-                    return false;
-                }
+            if schema
+                .max_items
+                .is_some_and(|max| array_val.len() > max as usize)
+            {
+                return false;
+            }
+
+            if schema
+                .min_items
+                .is_some_and(|min| array_val.len() < min as usize)
+            {
+                return false;
             }
 
             if let Some(unique_items) = schema.unique_items {
@@ -340,6 +229,7 @@ impl OpenApiValidator {
     }
 
     fn validate_boolean_rules(value: &Value, _schema: &ObjectSchema) -> bool {
+        // TODO - Are there boolean rules?
         if let Some(_) = value.as_bool() {
             return true;
         }
@@ -347,64 +237,55 @@ impl OpenApiValidator {
     }
 
     fn validate_null_rules(value: &Value, _schema: &ObjectSchema) -> bool {
+        // TODO - Are there 'null' rules?
         if let Some(_) = value.as_null() {
             return true;
         }
         false
     }
 
-    /// Validates a numeric value against the rules defined in the given schema.
-    ///
-    /// This function ensures that the provided numeric value complies with constraints
-    /// such as maximum, minimum, and exclusive bounds as defined in the `ObjectSchema`.
-    ///
-    /// # Parameters
-    /// - `value`: The value to validate, expected to be a JSON number (`&Value`).
-    /// - `schema`: The `ObjectSchema` containing the numeric constraints to validate against.
-    ///
-    /// # Returns
-    /// - `true`: If the numeric value satisfies all the constraints defined in the schema.
-    /// - `false`: If the value does not meet any of the constraints or is not a number.
-    ///
-    /// # Validation Rules
-    /// - **Maximum (`maximum`)**: Ensures the number does not exceed the maximum value.
-    /// - **Minimum (`minimum`)**: Ensures the number is not less than the minimum value.
-    /// - **Exclusive Maximum (`exclusiveMaximum`)**: Ensures the number is strictly less than the exclusive maximum value.
-    /// - **Exclusive Minimum (`exclusiveMinimum`)**: Ensures the number is strictly greater than the exclusive minimum value.
     fn validate_number_rules(value: &Value, schema: &ObjectSchema) -> bool {
         if let Some(number_val) = value.as_f64() {
-            if let Some(max) = schema.maximum.as_ref().and_then(|v| v.as_f64()) {
-                println!("Checking if value {} follows maximum: {}", number_val, max);
-                if number_val > max {
+            if !schema.enum_values.is_empty() {
+                if !Self::value_is_in_enum(value, &schema.enum_values) {
                     return false;
                 }
             }
 
-            if let Some(min) = schema.minimum.as_ref().and_then(|v| v.as_f64()) {
-                println!("Checking if value {} follows minimum: {}", number_val, min);
-                if number_val < min {
-                    return false;
-                }
+            if schema
+                .maximum
+                .as_ref()
+                .and_then(|v| v.as_f64())
+                .map_or(false, |max| number_val > max)
+            {
+                return false;
             }
 
-            if let Some(exl_max) = schema.exclusive_maximum.as_ref().and_then(|v| v.as_f64()) {
-                println!(
-                    "Checking if value {} follows exclusive maximum: {}",
-                    number_val, exl_max
-                );
-                if number_val >= exl_max {
-                    return false;
-                }
+            if schema
+                .minimum
+                .as_ref()
+                .and_then(|v| v.as_f64())
+                .map_or(false, |min| number_val < min)
+            {
+                return false;
             }
 
-            if let Some(exl_min) = schema.exclusive_minimum.as_ref().and_then(|v| v.as_f64()) {
-                println!(
-                    "Checking if value {} follows exclusive minimum: {}",
-                    number_val, exl_min
-                );
-                if number_val <= exl_min {
-                    return false;
-                }
+            if schema
+                .exclusive_maximum
+                .as_ref()
+                .and_then(|v| v.as_f64())
+                .map_or(false, |ex_max| number_val >= ex_max)
+            {
+                return false;
+            }
+
+            if schema
+                .exclusive_minimum
+                .as_ref()
+                .and_then(|v| v.as_f64())
+                .map_or(false, |ex_min| number_val <= ex_min)
+            {
+                return false;
             }
 
             return true;
@@ -412,25 +293,14 @@ impl OpenApiValidator {
         false
     }
 
-    /// Validates an object value against the rules defined in the given schema.
-    ///
-    /// This function ensures that the provided object adheres to constraints such as
-    /// the presence of required fields and the validation of properties based on their schemas.
-    ///
-    /// # Parameters
-    /// - `value`: The value to validate, expected to be a JSON object (`&Value`).
-    /// - `schema`: The `ObjectSchema` containing the object constraints to validate against.
-    /// - `spec`: The `Spec` used for resolving schema references and performing additional validation.
-    ///
-    /// # Returns
-    /// - `true`: If the object value satisfies all the constraints defined in the schema.
-    /// - `false`: If the value does not meet any constraints or is not an object.
-    ///
-    /// # Validation Rules
-    /// - **Required Fields**: Ensures that all fields specified in the schema's `required` list are present in the object.
-    /// - **Properties**: Validates each property of the object against its corresponding schema. If a schema reference is provided, it is resolved before validation.
     fn validate_object_rules(value: &Value, schema: &ObjectSchema, spec: &Spec) -> bool {
         if let Some(object_val) = value.as_object() {
+            if !schema.enum_values.is_empty() {
+                if !Self::value_is_in_enum(value, &schema.enum_values) {
+                    return false;
+                }
+            }
+
             if !schema.required.is_empty() {
                 let required_fields = &schema.required;
                 if required_fields
@@ -442,19 +312,63 @@ impl OpenApiValidator {
             }
 
             for (field, field_schema) in &schema.properties {
-                println!("Validation object property {} ", field);
-                if let Ok(resolved_schema) = field_schema.resolve(&spec) {
-                    if let Some(object_field_val) = object_val.get(field) {
-                        if !Self::validate_with_schema(object_field_val, &resolved_schema, spec) {
-                            return false;
-                        }
+                if let (Ok(resolved_schema), Some(object_field_val)) =
+                    (field_schema.resolve(&spec), object_val.get(field))
+                {
+                    if !Self::validate_with_schema(object_field_val, &resolved_schema, spec) {
+                        return false;
                     }
                 }
             }
-
             return true;
         }
         false
+    }
+
+    fn validate_all_of_schema_set(value: &Value, schema: &ObjectSchema, spec: &Spec) -> bool {
+        let mut valid_count = 0usize;
+        let goal_matches = schema.all_of.len();
+        for all_of_schema in &schema.all_of {
+            if all_of_schema
+                .resolve(&spec)
+                .is_ok_and(|schema| Self::validate_with_schema(value, &schema, spec))
+            {
+                valid_count += 1;
+            }
+        }
+
+        // all matches
+        valid_count == goal_matches
+    }
+
+    fn validate_any_of_schema_set(value: &Value, schema: &ObjectSchema, spec: &Spec) -> bool {
+        let mut valid_count = 0usize;
+        for any_of_schema in &schema.any_of {
+            if any_of_schema
+                .resolve(&spec)
+                .is_ok_and(|schema| Self::validate_with_schema(value, &schema, spec))
+            {
+                valid_count += 1;
+            }
+        }
+
+        // any matches
+        valid_count > 0
+    }
+
+    fn validate_one_of_schema_set(value: &Value, schema: &ObjectSchema, spec: &Spec) -> bool {
+        let mut valid_count = 0usize;
+        for any_of_schema in &schema.one_of {
+            if any_of_schema
+                .resolve(&spec)
+                .is_ok_and(|schema| Self::validate_with_schema(value, &schema, spec))
+            {
+                valid_count += 1;
+            }
+        }
+
+        // one and only one match
+        valid_count == 1
     }
 
     pub fn validate_with_schema(value: &Value, schema: &ObjectSchema, spec: &Spec) -> bool {
@@ -467,59 +381,25 @@ impl OpenApiValidator {
                 }
 
                 // validate for multiple types
+                // TODO - Look into this
                 SchemaTypeSet::Multiple(type_vals) => type_vals
                     .iter()
                     .any(|type_val| Self::validate_for_type(value, type_val, schema, spec)),
             };
 
         // Check if for oneOf, anyOf, allOf, and not
-        // NOTE: oas3 has not implemented 'not' yet
+        // NOTE: oas3-rs has not implemented 'not' yet
         } else if !schema.one_of.is_empty()
             || !schema.all_of.is_empty()
             || !schema.any_of.is_empty()
         /* !schema.not.is_empty() */
         {
-            let mut valid_count = 0usize;
             if !schema.all_of.is_empty() {
-                let goal_matches = schema.all_of.len();
-                for all_of_schema in &schema.all_of {
-                    if let Ok(resolved_schema) = all_of_schema.resolve(&spec) {
-                        if Self::validate_with_schema(value, &resolved_schema, spec) {
-                            valid_count += 1;
-                        }
-                    }
-                }
-
-                // all matches
-                if valid_count == goal_matches {
-                    return true;
-                }
+                return Self::validate_all_of_schema_set(value, schema, spec);
             } else if !schema.any_of.is_empty() {
-                for any_of_schema in &schema.any_of {
-                    if let Ok(resolved_schema) = any_of_schema.resolve(&spec) {
-                        if Self::validate_with_schema(value, &resolved_schema, spec) {
-                            valid_count += 1;
-                        }
-                    }
-                }
-
-                // any matches
-                if valid_count > 0 {
-                    return true;
-                }
+                return Self::validate_any_of_schema_set(value, schema, spec);
             } else if !schema.one_of.is_empty() {
-                for any_of_schema in &schema.one_of {
-                    if let Ok(resolved_schema) = any_of_schema.resolve(&spec) {
-                        if Self::validate_with_schema(value, &resolved_schema, spec) {
-                            valid_count += 1;
-                        }
-                    }
-                }
-
-                // one and only one match
-                if valid_count == 1 {
-                    return true;
-                }
+                return Self::validate_one_of_schema_set(value, schema, spec);
             }
 
             /* handle 'not' when implemented */
@@ -578,49 +458,151 @@ impl OpenApiValidator {
         None
     }
 
+    fn validate_path_param(
+        &self,
+        param_name: &str,
+        target_segment: &str,
+        path_method_item_params: &Vec<ObjectOrReference<Parameter>>,
+    ) -> bool {
+        if let Some(param) = self.get_parameter_from_name(param_name, path_method_item_params) {
+            if let Some(resolved_schema) = param
+                .schema
+                .and_then(|schema| schema.resolve(&self.specification).ok())
+            {
+                if let Ok(value) = Self::try_cast_path_param_to_schema_type(target_segment, &resolved_schema) {
+                    return Self::validate_with_schema(&value, &resolved_schema, &self.specification);
+                }
+            }
+        }
+        false
+    }
+
+    fn try_cast_path_param_to_schema_type(target_segment: &str, schema: &ObjectSchema) -> Result<Value, ()> {
+        let param_type = schema.schema_type.as_ref().unwrap();
+        match param_type {
+            SchemaTypeSet::Single(single) => {
+
+                // TODO - DRY this
+                match single {
+                    SchemaType::Boolean => {
+                        let cast: bool = target_segment.parse().unwrap();
+                        Ok(json!(cast))
+                    }
+                    SchemaType::Integer => {
+                        let cast: i64 = target_segment.parse().unwrap();
+                        Ok(json!(cast))
+                    }
+                    SchemaType::Number => {
+                        let cast: f64 = target_segment.parse().unwrap();
+                        Ok(json!(cast))
+                    }
+                    SchemaType::String => {
+                        Ok(json!(target_segment))
+                    }
+
+                    // invalid type for path parameter
+                    |_ => Err(()),
+                }
+            }
+            SchemaTypeSet::Multiple(multi) => {
+                for m_type in multi {
+                    let res = match m_type {
+                        SchemaType::Boolean => {
+                            let cast: bool = target_segment.parse().unwrap();
+                            Ok(json!(cast))
+                        }
+                        SchemaType::Integer => {
+                            let cast: i64 = target_segment.parse().unwrap();
+                            Ok(json!(cast))
+                        }
+                        SchemaType::Number => {
+                            let cast: f64 = target_segment.parse().unwrap();
+                            Ok(json!(cast))
+                        }
+                        SchemaType::String => {
+                            Ok(json!(target_segment))
+                        }
+                        |_ => Err(()),
+                    };
+
+                    if res.is_ok() {
+                        return res;
+                    }
+                }
+                Err(())
+            }
+        }
+    }
+
+    fn get_parameter_from_name(
+        &self,
+        param_name: &str,
+        endpoint_params: &Vec<ObjectOrReference<Parameter>>,
+    ) -> Option<Parameter> {
+        // look through each parameter for the operation, if the 'name' field value
+        // matches the provided 'param_name' then return that.
+        // returns None if there is no matching parameter schema for the operation.
+        endpoint_params.iter().find_map(|param| {
+            param.resolve(&self.specification).ok().and_then(|param| {
+                if param_name == param.name.as_str() {
+                    Some(param.clone())
+                } else {
+                    None
+                }
+            })
+        })
+    }
+
     fn match_path_segments(
         &self,
         target_path: &str,
         spec_path: &str,
         path_method_item_params: &Vec<ObjectOrReference<Parameter>>,
     ) -> bool {
-        let mut matching_segments = 0usize;
-        let mut segment_count = 0usize;
-        spec_path
-            .split(Self::PATH_SPLIT)
-            .collect::<Vec<&str>>()
-            .iter()
-            .zip(target_path.split(Self::PATH_SPLIT).collect::<Vec<&str>>().iter())
-            .for_each(|(spec_segment, target_segment): (&&str, &&str)| {
-                segment_count += 1;
+        let target_segments = target_path.split(Self::PATH_SPLIT).collect::<Vec<&str>>();
+        let spec_segments = spec_path.split(Self::PATH_SPLIT).collect::<Vec<&str>>();
 
-                /* if the segment in the spec is a path parameter, we have to validate to make sure the target path given matches the schema for that parameter name */
-                if let (Some(start), Some(end)) = (spec_segment.find(Self::PATH_PARAM_LEFT), spec_segment.find(Self::PATH_PARAM_RIGHT)) {
-                    let spec_segment_param_name = &spec_segment[start + 1..end];
-                    if let Some(spec_segment_param_value) =
-                        self.get_param_value(spec_segment_param_name, path_method_item_params)
-                    {
-                        if let Some(resolved_schema) = spec_segment_param_value.schema {
-                            if let Ok(schema) = resolved_schema.resolve(&self.specification) {
-                                if Self::validate_with_schema(&json!(target_segment), &schema, &self.specification) {
-                                    matching_segments += 1;
-                                }
-                            }
-                        };
+        // The number of segments in the path, and the number of segments that match the given path.
+        // if the numbers are equal, it means we've found a match.
+        let (matching_segments, segment_count) =
+            spec_segments.iter().zip(target_segments.iter()).fold(
+                (0, 0),
+                |(mut matches, mut count), (spec_segment, target_segment)| {
+                    count += 1;
+
+                    // If the path in the spec contains a path parameter,
+                    // we need to make sure the value in the given_path's value at the segment
+                    // follows the schema rules defined in the specification.
+                    // If the validation fails, we do not consider it a match.
+                    if let Some(param_name) = Self::extract_path_param_name(spec_segment) {
+                        if self.validate_path_param(
+                            param_name,
+                            target_segment,
+                            path_method_item_params,
+                        ) {
+                            matches += 1;
+                        }
+
+                    // Simplest case where we check to see if the segment values are the same (non-path parameter)
+                    } else if spec_segment == target_segment {
+                        matches += 1;
                     }
 
-                /* simplest case, check if the string values are the same. */
-                } else if spec_segment == target_segment {
-                    matching_segments += 1;
-                }
-            });
+                    (matches, count)
+                },
+            );
 
-        /* if all segments match, we found our path */
-        if matching_segments == segment_count {
-            return true;
-        }
+        matching_segments == segment_count
+    }
 
-        false
+    /// Extracts the path parameter name (between the chars '{' and '}')
+    /// returns None if there is no path parameter in the segment.
+    fn extract_path_param_name(segment: &str) -> Option<&str> {
+        segment.find(Self::PATH_PARAM_LEFT).and_then(|start| {
+            segment
+                .find(Self::PATH_PARAM_RIGHT)
+                .map(|end| &segment[start + 1..end])
+        })
     }
 
     fn validate_request_body(
@@ -659,41 +641,6 @@ impl OpenApiValidator {
         false
     }
 
-    fn validate_parameters(
-        headers: &HashMap<String, String>,
-        parameters: &Vec<&ObjectOrReference<Parameter>>,
-        spec: &Spec,
-    ) -> bool {
-        for parameter in parameters {
-            if let Ok(resolved_param) = parameter.resolve(&spec) {
-                if let Some((_, header_value)) = headers
-                    .iter()
-                    .find(|(header_name, _)| header_name.as_str() == resolved_param.name)
-                {
-                    if let Some(_) = resolved_param.content {
-                        // TODO - can content be defined in a parameter?
-                        todo!("validating 'content' field in parameters not implemented yet")
-                    } else if let Some(schema) = resolved_param.schema {
-                        if let Ok(schema) = schema.resolve(&spec) {
-                            if !Self::validate_with_schema(
-                                &Value::String(header_value.clone()),
-                                &schema,
-                                &spec,
-                            ) {
-                                return false;
-                            }
-                        }
-                    }
-
-                /* if the header is not found, check to see if it's required or not. */
-                } else if resolved_param.required.unwrap_or(false) {
-                    return false;
-                }
-            }
-        }
-        true
-    }
-
     pub fn validate_request(
         &self,
         path: &str,
@@ -703,7 +650,6 @@ impl OpenApiValidator {
         body: Option<&Value>,
     ) -> Result<(), ()> {
         if let Some(operation) = self.get_matching_operation(path, method) {
-
             /* validate body */
             if let (Some(request_schema), Some(body), Some(headers)) =
                 (&operation.request_body, body, headers)
@@ -724,49 +670,90 @@ impl OpenApiValidator {
             if !operation.parameters.is_empty() {
                 let parameters = &operation.parameters;
 
-                /* filter params to Header params only and validate */
-                if let Some(headers) = headers {
-                    let relevant_parameters = parameters
-                        .iter()
-                        .filter(|param| {
-                            param
-                                .resolve(&self.specification)
-                                .is_ok_and(|param| param.location == ParameterIn::Header)
-                        })
-                        .collect::<Vec<&ObjectOrReference<Parameter>>>();
-                    if !Self::validate_parameters(
+                /* validate headers parameters if present */
+                if headers.is_some_and(|headers| {
+                    !Self::validate_parameter_type(
                         headers,
-                        &relevant_parameters,
+                        ParameterIn::Header,
+                        parameters,
                         &self.specification,
-                    ) {
-                        return Err(());
-                    }
+                    )
+                }) {
+                    return Err(());
                 }
 
-                /* filter params to Query params only and validate */
-                if let Some(query_params) = query_params {
-                    let relevant_parameters = parameters
-                        .iter()
-                        .filter(|param| {
-                            param
-                                .resolve(&self.specification)
-                                .is_ok_and(|param| param.location == ParameterIn::Query)
-                        })
-                        .collect::<Vec<&ObjectOrReference<Parameter>>>();
-                    if !Self::validate_parameters(
+                /* validate query parameters if present */
+                if query_params.is_some_and(|query_params| {
+                    !Self::validate_parameter_type(
                         query_params,
-                        &relevant_parameters,
+                        ParameterIn::Query,
+                        &parameters,
                         &self.specification,
-                    ) {
-                        return Err(());
-                    }
+                    )
+                }) {
+                    return Err(());
                 }
             }
 
-            return Ok(())
+            return Ok(());
         }
 
         Err(())
+    }
+
+    fn validate_parameter_type(
+        given_parameters: &HashMap<String, String>,
+        given_parameter_type: ParameterIn,
+        operation_parameters: &Vec<ObjectOrReference<Parameter>>,
+        spec: &Spec,
+    ) -> bool {
+        // Filters the current operation parameters to the ones that have the matching
+        // 'ParameterIn' type. i.e. ParameterIn::Header, ParameterIn::Query, etc.
+        let relevant_parameters = operation_parameters
+            .iter()
+            .filter(|param| {
+                param
+                    .resolve(&spec)
+                    .is_ok_and(|param| param.location == given_parameter_type)
+            })
+            .collect::<Vec<&ObjectOrReference<Parameter>>>();
+
+        Self::validate_given_parameters(given_parameters, &relevant_parameters, &spec)
+    }
+
+    fn validate_given_parameters(
+        given_parameters: &HashMap<String, String>,
+        operation_parameters_sub_set: &Vec<&ObjectOrReference<Parameter>>,
+        specification: &Spec,
+    ) -> bool {
+        for parameter in operation_parameters_sub_set {
+            if let Ok(resolved_param) = parameter.resolve(&specification) {
+                if let Some((_, param_value)) = given_parameters
+                    .iter()
+                    .find(|(param_key, _)| param_key.as_str() == resolved_param.name)
+                {
+                    if let Some(_) = resolved_param.content {
+                        // TODO - can content be defined in a parameter?
+                        todo!("validating 'content' field in parameters not implemented yet")
+                    } else if let Some(schema) = resolved_param.schema {
+                        if let Ok(schema) = schema.resolve(&specification) {
+                            if !Self::validate_with_schema(
+                                &Value::String(param_value.clone()),
+                                &schema,
+                                &specification,
+                            ) {
+                                return false;
+                            }
+                        }
+                    }
+
+                /* if the header is not found, check to see if it's required or not. */
+                } else if resolved_param.required.unwrap_or(false) {
+                    return false;
+                }
+            }
+        }
+        true
     }
 }
 
@@ -779,7 +766,7 @@ mod test {
     use std::fs;
 
     #[test]
-    fn test_read_spec() {
+    fn test_request_validation() {
         let file = fs::read_to_string("test/openapi.json").unwrap();
         let spec = oas3::from_json(file).unwrap();
         let test_request_path = "/pet/findById/123";
@@ -795,6 +782,8 @@ mod test {
             None,
             None,
         );
+
+        assert!(result.is_ok());
     }
 
     #[test]

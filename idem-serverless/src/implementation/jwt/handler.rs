@@ -25,31 +25,32 @@ impl JwtValidationHandler {
     }
 
     fn validate_scope(&self, request_path: &str, method: &str, claims: &Value) -> Result<(), ()> {
-        let spec_validator =
-            OpenApiValidator::from_file(&format!("{}/{}", ROOT_CONFIG_PATH, "openapi.json"))?;
-        let schemas = spec_validator.get_security_scopes(request_path, method);
-        let token_scopes = match claims.get("scope") {
-            None => return Err(()),
-            Some(scope) => {
-                if let Some(scope) = scope.as_str() {
-                    scope.split(' ').collect::<Vec<&str>>()
-                } else {
-                    return Err(());
-                }
-            }
-        };
-        if let Some(schemas) = schemas {
-            for (_, scopes) in schemas {
-                let potential_matched_scope = scopes.iter().find(|scope| {
-                    token_scopes.iter().any(|token_scope| scope == token_scope)
-                });
-
-                if potential_matched_scope.is_some() {
-                    return Ok(());
-                }
-            }
-        }
-        Err(())
+        todo!()
+//        let spec_validator =
+//            OpenApiValidator::from_file(&format!("{}/{}", ROOT_CONFIG_PATH, "openapi.json"));
+//        let schemas = spec_validator.get_security_scopes(request_path, method);
+//        let token_scopes = match claims.get("scope") {
+//            None => return Err(()),
+//            Some(scope) => {
+//                if let Some(scope) = scope.as_str() {
+//                    scope.split(' ').collect::<Vec<&str>>()
+//                } else {
+//                    return Err(());
+//                }
+//            }
+//        };
+//        if let Some(schemas) = schemas {
+//            for (_, scopes) in schemas {
+//                let potential_matched_scope = scopes.iter().find(|scope| {
+//                    token_scopes.iter().any(|token_scope| scope == token_scope)
+//                });
+//
+//                if potential_matched_scope.is_some() {
+//                    return Ok(());
+//                }
+//            }
+//        }
+//        Err(())
     }
 
     fn validate_aud(&self, claims: &Value) -> Result<(), ()> {

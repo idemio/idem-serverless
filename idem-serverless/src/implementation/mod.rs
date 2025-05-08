@@ -7,6 +7,7 @@ pub mod proxy;
 pub mod traceability;
 mod validator;
 
+use std::collections::{hash_map, HashMap};
 use crate::implementation::jwt::handler::JwtValidationHandler;
 use crate::implementation::{
     cors::handler::CorsHandler, header::handler::HeaderHandler,
@@ -24,6 +25,7 @@ use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayPr
 use lambda_http::Context;
 use std::future::Future;
 use std::pin::Pin;
+use lambda_http::http::HeaderMap;
 use crate::ROOT_CONFIG_PATH;
 
 pub type LambdaExchange = Exchange<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>;

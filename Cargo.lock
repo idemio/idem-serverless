@@ -1519,9 +1519,12 @@ dependencies = [
 name = "idem-openapi"
 version = "0.1.0"
 dependencies = [
+ "dashmap",
  "idem-config",
  "jsonschema",
  "oas3 0.16.1",
+ "once_cell",
+ "serde",
  "serde_json",
 ]
 

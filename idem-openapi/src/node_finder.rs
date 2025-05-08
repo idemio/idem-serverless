@@ -1,10 +1,11 @@
-use std::collections::{BTreeMap, HashMap};
+use crate::{try_cast_to_type, validate_with_schema};
 use oas3::Spec;
 use oas3::spec::{ObjectOrReference, ObjectSchema, Operation, Parameter, PathItem, SchemaTypeSet};
-use crate::{try_cast_to_type, validate_with_schema};
 use serde_json::Value;
+use std::collections::BTreeMap;
+use std::str::FromStr;
 
-pub struct OpenAPINodeFinder;
+pub struct OpenApiNodeFinder;
 
 #[derive(Debug, Clone)]
 pub struct JsonPath(pub Vec<String>);
@@ -35,12 +36,58 @@ impl JsonPath {
     }
 }
 
-impl OpenAPINodeFinder {
+impl OpenApiNodeFinder {
     const PATHS_KEY: &'static str = "paths";
     const PATH_SPLIT: char = '/';
     const PATH_PARAM_LEFT: char = '{';
     const PATH_PARAM_RIGHT: char = '}';
 
+    /// Performs a search for a specific path and HTTP method in the OpenAPI specification.
+    ///
+    /// This function searches through all paths in the OpenAPI spec to find a match for the given
+    /// path and method, with the option of taking path parameters into account during matching.
+    /// For example, an OpenAPI path `/users/{id}` would match an input path like `/users/123`.
+    ///
+    /// The function checks each path and method combination, and when it finds a match, it constructs
+    /// a JsonPath that points to the exact location of the operation in the specification.
+    ///
+    /// # Arguments
+    ///
+    /// * `path_to_match` - The concrete API path to search for (e.g., "/users/123")
+    /// * `method_to_match` - The HTTP method to match (e.g., "GET", "POST", "PUT")
+    /// * `spec` - The complete OpenAPI specification, needed for parameter resolution
+    /// * `path_param` - Indicate if you want to do a detailed search because the
+    ///                  path provided contains path parameters.
+    ///
+    /// # Returns
+    ///
+    /// If a match is found, returns `Some((operation, json_path))` where:
+    /// * `operation` is a reference to the matching Operation object
+    /// * `json_path` is the JsonPath pointing to the operation in the spec
+    ///
+    /// Returns `None` if no matching path and method combination is found.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use oas3::Spec;
+    /// use std::collections::BTreeMap;
+    /// use std::fs;
+    /// use idem_openapi::node_finder::OpenApiNodeFinder;
+    ///
+    ///
+    /// let json_string = fs::read_to_string("test/openapi").unwrap();
+    /// let spec = oas3::from_json(json_string).unwrap();
+    ///
+    ///
+    /// let result = OpenApiNodeFinder::find_matching_operation("/pet/findById/42", "GET", &spec, true);
+    /// assert!(result.is_some());
+    ///
+    /// let result = OpenApiNodeFinder::find_matching_operation("/pet/findPById/42", "GET", &spec, false);
+    /// assert!(result.is_none());
+    /// ```
+    /// Note: Path parameters were a mistake :^)
+    ///
     pub fn find_matching_operation<'a>(
         path_to_match: &'a str,
         method_to_match: &'a str,
@@ -53,23 +100,17 @@ impl OpenAPINodeFinder {
         };
 
         if path_param {
-            Self::detailed_path_search(
-                path_to_match,
-                method_to_match,
-                spec_paths,
-                spec)
+            Self::detailed_path_search(path_to_match, method_to_match, spec_paths, spec)
         } else {
-
-            if let Some(path_item) = spec_paths.get(path_to_match) {
-                if let Some((_, operation)) = path_item.methods().into_iter().find(|(method, _)| {
-                    method.as_str() == method_to_match
-                }) {
-                    let mut path = JsonPath::new();
-                    path.add_segment(Self::PATHS_KEY.to_string())
-                        .add_segment(path_to_match.to_string())
-                        .add_segment(method_to_match.to_lowercase().to_string());
-                    return Some((operation, path));
-                }
+            if let Some(op) = spec.operation(
+                &http::method::Method::from_str(method_to_match).unwrap(),
+                path_to_match,
+            ) {
+                let mut path = JsonPath::new();
+                path.add_segment(Self::PATHS_KEY.to_string())
+                    .add_segment(path_to_match.to_string())
+                    .add_segment(method_to_match.to_lowercase().to_string());
+                return Some((op, path));
             }
             None
         }
@@ -81,12 +122,15 @@ impl OpenAPINodeFinder {
         paths: &'a BTreeMap<String, PathItem>,
         spec: &'a Spec,
     ) -> Option<(&'a Operation, JsonPath)> {
+
+        // Find the matching method
         for (spec_path, path_item) in paths.iter() {
             if let Some((_, op)) = path_item
                 .methods()
                 .into_iter()
                 .find(|(method, _)| method.as_str() == method_to_match)
             {
+                // Perform our check to see if this matches
                 let path_method_item_params = &op.parameters;
                 if Self::match_openapi_endpoint_path_segments(
                     path_to_match,
@@ -166,6 +210,7 @@ impl OpenAPINodeFinder {
         endpoint_params: &Vec<ObjectOrReference<Parameter>>,
         spec: &Spec,
     ) -> Option<Parameter> {
+
         // look through each parameter for the operation, if the 'name' field value
         // matches the provided 'param_name' then return that.
         // returns None if there is no matching parameter schema for the operation.

@@ -1,5 +1,5 @@
 pub mod node_finder;
-use crate::node_finder::{JsonPath, OpenAPINodeFinder};
+use crate::node_finder::{JsonPath, OpenApiNodeFinder};
 use dashmap::DashMap;
 use jsonschema::{Resource, Validator};
 use oas3::{Spec};
@@ -183,22 +183,40 @@ impl OpenApiValidator {
         Some((schema, json_path))
     }
 
-    pub fn validate_request_headers(
+    fn validate_request_headers(
         &self,
+        operation: &Operation,
         headers: &HashMap<String, String>,
-        json_path: &JsonPath,
+        _json_path: &JsonPath,
     ) -> Result<(), OpenApiValidationError>
     {
-        Ok(())
+        match Self::filter_and_validate_params(
+            headers,
+            ParameterIn::Header,
+            &operation.parameters,
+            &self.specification
+        ) {
+            true => Ok(()),
+            false => Err(OpenApiValidationError::InvalidQueryParameters("Validation failed".to_string())),
+        }
     }
 
-    pub fn validate_request_query_params(
+    fn validate_request_query_params(
         &self,
+        operation: &Operation,
         query_params: &HashMap<String, String>,
-        json_path: &JsonPath,
+        _json_path: &JsonPath,
     ) -> Result<(), OpenApiValidationError>
     {
-        Ok(())
+        match Self::filter_and_validate_params(
+            query_params,
+            ParameterIn::Query,
+            &operation.parameters,
+            &self.specification
+        ) {
+            true => Ok(()),
+            false => Err(OpenApiValidationError::InvalidHeaders("Validation failed".to_string())),
+        }
     }
 
     fn validate_request_body(
@@ -255,7 +273,7 @@ impl OpenApiValidator {
         query_params: Option<&HashMap<String, String>>,
     ) -> Result<(), OpenApiValidationError>
     {
-        match OpenAPINodeFinder::find_matching_operation(path, method, &self.specification, true) {
+        match OpenApiNodeFinder::find_matching_operation(path, method, &self.specification, true) {
             Some((operation, path)) => {
                 // if body was provided, so we validate it.
                 // If a body was provided, the headers must also be provided because we need to find out the content-type
@@ -277,13 +295,13 @@ impl OpenApiValidator {
                 }
 
                 if let Some(headers) = headers {
-                    if let Err(e) = self.validate_request_headers(headers, &path) {
+                    if let Err(e) = self.validate_request_headers(&operation, headers, &path) {
                         return Err(e);
                     }
                 }
 
                 if let Some(query_params) = query_params {
-                    if let Err(e) = self.validate_request_query_params(query_params, &path) {
+                    if let Err(e) = self.validate_request_query_params(&operation, query_params, &path) {
                         return Err(e);
                     }
                 }

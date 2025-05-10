@@ -1,7 +1,90 @@
-mod css_encoder;
-mod html_encoder;
 mod encoder;
-mod xml_encoder;
+
+pub mod encoders {
+    use crate::encoder::{CharRule, EncodeType, CharRuleType, EncoderV2, simple_hex_encode};
+
+    pub fn java_script_encoder() -> EncoderV2 {
+        let rules = vec![
+            CharRule::Range {
+                start: '\u{00000}',
+                end: '\u{0001F}',
+                exclude: Some(vec![
+                    '\u{0008}', '\u{0009}', '\u{000A}', '\u{000C}', '\u{000D}'
+                ]),
+                rule_type: CharRuleType::Allow,
+            },
+
+            CharRule::Single {
+                c: '\u{0008}',
+                rule_type: CharRuleType::Escape,
+            },
+
+            CharRule::Single {
+                c: '\u{0009}',
+                rule_type: CharRuleType::Escape,
+            },
+
+            CharRule::Single {
+                c: '\u{000A}',
+                rule_type: CharRuleType::Escape,
+            },
+
+            CharRule::Single {
+                c: '\u{000C}',
+                rule_type: CharRuleType::Escape,
+            },
+
+            CharRule::Single {
+                c: '\u{000D}',
+                rule_type: CharRuleType::Escape,
+            },
+
+            CharRule::Range {
+                start: ' ',
+                end: '~',
+                exclude: Some(vec![
+                    '"', '\\', '\'', '-', '/', '&', '`'
+                ]),
+                rule_type: CharRuleType::Allow
+            },
+
+            CharRule::Single {
+                c: '/',
+                rule_type: CharRuleType::Escape,
+            },
+
+            CharRule::Single {
+                c: '-',
+                rule_type: CharRuleType::Escape,
+            },
+
+            CharRule::Single {
+                c: '"',
+                rule_type: CharRuleType::Escape,
+            },
+
+            CharRule::Single {
+                c: '\'',
+                rule_type: CharRuleType::Escape,
+            },
+
+            CharRule::Single {
+                c: '&',
+                rule_type: CharRuleType::Escape,
+            },
+
+            CharRule::Range {
+                start: '\u{00080}',
+                end: '\u{FFFFF}',
+                exclude: None,
+                rule_type: CharRuleType::Deny
+            }
+        ];
+        EncoderV2::new(rules, EncodeType::Hex(simple_hex_encode), '\\', '\u{FFFD}')
+    }
+}
+
+
 
 fn get_character_mask(c: char) -> u32 {
     1 << (c as u32 & 31)
@@ -24,14 +107,14 @@ enum Mode {
     Attribute,
 }
 
-struct JavaScriptEncoder {
+struct OldEncoder {
     mode: Mode,
     ascii_only: bool,
     valid_masks: [u32; 4],
     hex_encode_quotes: bool,
 }
 
-impl JavaScriptEncoder {
+impl OldEncoder {
     fn new(mode: Mode, ascii_only: bool) -> Self {
         let mut valid_masks = [
             0,
@@ -53,7 +136,7 @@ impl JavaScriptEncoder {
         }
 
         let hex_encode_quotes = mode == Mode::Attribute || mode == Mode::Html;
-        JavaScriptEncoder {
+        OldEncoder {
             mode,
             ascii_only,
             valid_masks,
@@ -144,13 +227,13 @@ impl JavaScriptEncoder {
 
 #[cfg(test)]
 mod test {
-    use crate::{JavaScriptEncoder, Mode};
+    use crate::{OldEncoder, Mode};
 
 
     ////////////////////////////////////////////////////////////////////////////
     // Java Script Encoder Tests Start
     ////////////////////////////////////////////////////////////////////////////
-    fn generic_tests(encoder: &JavaScriptEncoder) {
+    fn generic_tests(encoder: &OldEncoder) {
         let backspace_test = encoder.encode(&'\u{0008}'.to_string());
         assert_eq!("\\b", backspace_test);
 
@@ -179,7 +262,7 @@ mod test {
         assert_eq!("ABCD", simple_upper_case_test);
     }
 
-    fn not_ascii_only_test(encoder: &JavaScriptEncoder) {
+    fn not_ascii_only_test(encoder: &OldEncoder) {
         let simple_unicode_test = encoder.encode(&'\u{1234}'.to_string());
         assert_eq!("\u{1234}", simple_unicode_test);
 
@@ -187,7 +270,7 @@ mod test {
         assert_eq!("\u{00ff}", high_ascii_test);
     }
 
-    fn ascii_only_test(encoder: &JavaScriptEncoder) {
+    fn ascii_only_test(encoder: &OldEncoder) {
         let simple_unicode_test = encoder.encode(&'\u{1234}'.to_string());
         assert_eq!("\\u1234", simple_unicode_test);
 
@@ -197,7 +280,7 @@ mod test {
 
     #[test]
     fn java_script_encode_block_test() {
-        let encoder = JavaScriptEncoder::new(Mode::Block, false);
+        let encoder = OldEncoder::new(Mode::Block, false);
         generic_tests(&encoder);
         not_ascii_only_test(&encoder);
 
@@ -207,7 +290,7 @@ mod test {
         let single_quote_test = encoder.encode(&'\''.to_string());
         assert_eq!("\\\'", single_quote_test);
 
-        let encoder = JavaScriptEncoder::new(Mode::Block, true);
+        let encoder = OldEncoder::new(Mode::Block, true);
         generic_tests(&encoder);
         ascii_only_test(&encoder);
 
@@ -220,7 +303,7 @@ mod test {
 
     #[test]
     fn java_script_encode_html_test() {
-        let encoder = JavaScriptEncoder::new(Mode::Html, false);
+        let encoder = OldEncoder::new(Mode::Html, false);
         generic_tests(&encoder);
         not_ascii_only_test(&encoder);
 
@@ -230,7 +313,7 @@ mod test {
         let single_quote_test = encoder.encode(&'\''.to_string());
         assert_eq!("\\x27", single_quote_test);
 
-        let encoder = JavaScriptEncoder::new(Mode::Html, true);
+        let encoder = OldEncoder::new(Mode::Html, true);
         generic_tests(&encoder);
         ascii_only_test(&encoder);
 
@@ -244,7 +327,7 @@ mod test {
 
     #[test]
     fn java_script_encode_source_test() {
-        let encoder = JavaScriptEncoder::new(Mode::Source, false);
+        let encoder = OldEncoder::new(Mode::Source, false);
         generic_tests(&encoder);
         not_ascii_only_test(&encoder);
 
@@ -254,7 +337,7 @@ mod test {
         let single_quote_test = encoder.encode(&'\''.to_string());
         assert_eq!("\\\'", single_quote_test);
 
-        let encoder = JavaScriptEncoder::new(Mode::Source, true);
+        let encoder = OldEncoder::new(Mode::Source, true);
         generic_tests(&encoder);
         ascii_only_test(&encoder);
 
@@ -267,7 +350,7 @@ mod test {
 
     #[test]
     fn java_script_encode_attribute_test() {
-        let encoder = JavaScriptEncoder::new(Mode::Attribute, false);
+        let encoder = OldEncoder::new(Mode::Attribute, false);
         generic_tests(&encoder);
         not_ascii_only_test(&encoder);
 
@@ -277,7 +360,7 @@ mod test {
         let single_quote_test = encoder.encode(&'\''.to_string());
         assert_eq!("\\x27", single_quote_test);
 
-        let encoder = JavaScriptEncoder::new(Mode::Attribute, true);
+        let encoder = OldEncoder::new(Mode::Attribute, true);
         generic_tests(&encoder);
         ascii_only_test(&encoder);
 

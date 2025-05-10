@@ -1494,6 +1494,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "idem-encoder"
+version = "0.1.0"
+
+[[package]]
 name = "idem-error"
 version = "0.1.0"
 

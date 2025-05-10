@@ -9,13 +9,14 @@ use lambda_http::{Context, Error, LambdaEvent};
 use idem_config::config_cache::get_file;
 use idem_config::execution_flow_config::ExecutionFlowConfig;
 use idem_handler::factory::HandlerFactory;
+use crate::ROOT_CONFIG_PATH;
 
 pub async fn entry(
     event: LambdaEvent<ApiGatewayProxyRequest>,
 ) -> Result<ApiGatewayProxyResponse, Error> {
 
     // Load the execution flow configuration
-    let config_file: Arc<String> = get_file("/opt/config/handlers.json").unwrap();
+    let config_file: Arc<String> = get_file(&format!("{}/{}", ROOT_CONFIG_PATH, "handlers.json")).unwrap();
     let execution_flow_config: ExecutionFlowConfig = serde_json::from_str(&config_file).unwrap();
     let (payload, context) = event.into_parts();
 

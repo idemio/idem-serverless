@@ -10,6 +10,7 @@
       <sourceFolder url="file://$MODULE_DIR$/idem-error/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/idem-openapi/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/idem-encoder/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/idem-encoder/benches" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/idem-handler/target" />
       <excludeFolder url="file://$MODULE_DIR$/idem-serverless/target" />
       <excludeFolder url="file://$MODULE_DIR$/target" />

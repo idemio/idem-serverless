@@ -1,1 +1,0 @@
-Sample data taken from: https://github.com/OWASP/owasp-java-encoder

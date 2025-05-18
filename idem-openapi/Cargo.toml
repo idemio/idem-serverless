@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-idem-config = {path = "../idem-config"}
+#idem-config = {path = "../idem-config"}
 
 oas3 = "0.16.1"
 jsonschema = "0.30.0"

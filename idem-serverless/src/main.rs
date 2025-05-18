@@ -1,9 +1,10 @@
+use core::result::Result;
+use idem_handler_config::config_cache::init_or_replace_config;
 use lambda_http::{lambda_runtime, service_fn, tracing, Error};
 mod implementation;
 mod entry;
 
 use entry::entry;
-use idem_config::config_cache::{init_or_replace_config};
 pub const ROOT_CONFIG_PATH: &str = "/opt/config";
 
 fn main() -> Result<(), Error> {

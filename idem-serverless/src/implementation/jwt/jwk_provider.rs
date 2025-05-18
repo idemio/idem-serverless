@@ -1,6 +1,7 @@
+use idem_handler_config::config_cache::get_file;
 use jsonwebtoken::jwk::JwkSet;
 use serde::Deserialize;
-use idem_config::config_cache::get_file;
+//use idem_config::config_cache::get_file;
 
 pub trait JwkProvider {
     fn jwk(&self) -> Result<JwkSet, ()>;

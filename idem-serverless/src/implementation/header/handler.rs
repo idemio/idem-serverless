@@ -1,16 +1,21 @@
+use core::iter::Extend;
+use core::prelude::rust_2024::{Ok, Some};
+use core::result::Result;
+use async_trait::async_trait;
+use idem_handler::exchange::AttachmentKey;
+use idem_handler::handler::Handler;
+use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
+use idem_handler_config::config::Config;
+use idem_handler_macro::ConfigurableHandler;
+use std::collections::HashMap;
+
 use crate::implementation::header::config::{
     HeaderHandlerConfig, ModifyHeaderKey, ModifyHeaderValue,
 };
-use crate::implementation::{HandlerOutput, LambdaExchange};
-use idem_config::config::Config;
-use idem_handler::exchange::AttachmentKey;
-use idem_handler::handler::Handler;
-use idem_handler::status::{Code, HandlerStatus};
+use crate::implementation::{LambdaExchange};
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::http::{HeaderMap, HeaderName, HeaderValue};
 use lambda_http::Context;
-use std::collections::HashMap;
-use idem_macro::ConfigurableHandler;
 
 #[derive(ConfigurableHandler)]
 pub struct HeaderHandler {
@@ -41,88 +46,82 @@ impl HeaderHandler {
 const REMOVE_RESPONSE_HEADER_ATTACHMENT_KEY: AttachmentKey = AttachmentKey("remove_response_headers");
 const UPDATE_RESPONSE_HEADER_ATTACHMENT_KEY: AttachmentKey = AttachmentKey("update_response_headers");
 
+#[async_trait]
 impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for HeaderHandler {
-    fn exec<'i1, 'i2, 'o>(&'i1 self, exchange: &'i2 mut LambdaExchange) -> HandlerOutput<'o>
-    where
-        'i1: 'o,
-        'i2: 'o,
-        Self: 'o,
+    async fn exec(&self, exchange: &mut LambdaExchange) -> Result<HandlerStatus, HandlerExecutionError>
     {
-        println!("Header handler starts!");
-        Box::pin(async move {
-            if !self.config.get().enabled {
-                return Ok(HandlerStatus::new(Code::DISABLED));
-            }
+        if !self.config.get().enabled {
+            return Ok(HandlerStatus::new(Code::DISABLED));
+        }
 
-            let request = exchange.input().unwrap();
-            let request_path = request.path.as_deref().unwrap_or("/");
+        let request = exchange.input().unwrap();
+        let request_path = request.path.as_deref().unwrap_or("/");
 
-            let mut request_remove_headers = vec![];
-            let mut request_update_headers = HashMap::new();
-            let mut response_remove_headers = vec![];
-            let mut response_update_headers = HashMap::new();
+        let mut request_remove_headers = vec![];
+        let mut request_update_headers = HashMap::new();
+        let mut response_remove_headers = vec![];
+        let mut response_update_headers = HashMap::new();
 
-            // Gather rules for current path
-            request_remove_headers.extend(self.config.get().request.remove.clone());
-            request_update_headers.extend(self.config.get().request.update.clone());
-            response_remove_headers.extend(self.config.get().response.remove.clone());
-            response_update_headers.extend(self.config.get().response.update.clone());
+        // Gather rules for current path
+        request_remove_headers.extend(self.config.get().request.remove.clone());
+        request_update_headers.extend(self.config.get().request.update.clone());
+        response_remove_headers.extend(self.config.get().response.remove.clone());
+        response_update_headers.extend(self.config.get().response.update.clone());
 
-            if let Some((_, path_config)) = self
-                .config
-                .get()
-                .path_prefix_header
-                .iter()
-                .find(|(path_prefix, _)| request_path.starts_with(&path_prefix.0))
+        if let Some((_, path_config)) = self
+            .config
+            .get()
+            .path_prefix_header
+            .iter()
+            .find(|(path_prefix, _)| request_path.starts_with(&path_prefix.0))
+        {
+            request_remove_headers.extend(path_config.request.remove.clone());
+            request_update_headers.extend(path_config.request.update.clone());
+            response_remove_headers.extend(path_config.response.remove.clone());
+            response_update_headers.extend(path_config.response.update.clone());
+        }
+
+        /* handle header request changes */
+        Self::update_headers(
+            &mut exchange.input_mut().unwrap().headers,
+            request_update_headers,
+        );
+
+        Self::remove_headers(
+            &mut exchange.input_mut().unwrap().headers,
+            request_remove_headers,
+        );
+
+        /* handle header response changes */
+        exchange
+            .attachments_mut()
+            .add_attachment::<Vec<ModifyHeaderKey>>(
+                REMOVE_RESPONSE_HEADER_ATTACHMENT_KEY,
+                Box::new(response_remove_headers),
+            );
+        exchange
+            .attachments_mut()
+            .add_attachment::<HashMap<ModifyHeaderKey, ModifyHeaderValue>>(
+                UPDATE_RESPONSE_HEADER_ATTACHMENT_KEY,
+                Box::new(response_update_headers),
+            );
+
+        exchange.add_output_listener(|response, attachments| {
+            if let Some(remove_headers) = attachments
+                .attachment::<Vec<ModifyHeaderKey>>(REMOVE_RESPONSE_HEADER_ATTACHMENT_KEY)
             {
-                request_remove_headers.extend(path_config.request.remove.clone());
-                request_update_headers.extend(path_config.request.update.clone());
-                response_remove_headers.extend(path_config.response.remove.clone());
-                response_update_headers.extend(path_config.response.update.clone());
+                Self::remove_headers(&mut response.headers, remove_headers.clone())
             }
 
-            /* handle header request changes */
-            Self::update_headers(
-                &mut exchange.input_mut().unwrap().headers,
-                request_update_headers,
-            );
-
-            Self::remove_headers(
-                &mut exchange.input_mut().unwrap().headers,
-                request_remove_headers,
-            );
-
-            /* handle header response changes */
-            exchange
-                .attachments_mut()
-                .add_attachment::<Vec<ModifyHeaderKey>>(
-                    REMOVE_RESPONSE_HEADER_ATTACHMENT_KEY,
-                    Box::new(response_remove_headers),
-                );
-            exchange
-                .attachments_mut()
-                .add_attachment::<HashMap<ModifyHeaderKey, ModifyHeaderValue>>(
+            if let Some(update_headers) = attachments
+                .attachment::<HashMap<ModifyHeaderKey, ModifyHeaderValue>>(
                     UPDATE_RESPONSE_HEADER_ATTACHMENT_KEY,
-                    Box::new(response_update_headers),
-                );
+                )
+            {
+                Self::update_headers(&mut response.headers, update_headers.clone())
+            }
+        });
 
-            exchange.add_output_listener(|response, attachments| {
-                if let Some(remove_headers) = attachments
-                    .attachment::<Vec<ModifyHeaderKey>>(REMOVE_RESPONSE_HEADER_ATTACHMENT_KEY)
-                {
-                    Self::remove_headers(&mut response.headers, remove_headers.clone())
-                }
-
-                if let Some(update_headers) = attachments
-                    .attachment::<HashMap<ModifyHeaderKey, ModifyHeaderValue>>(
-                        UPDATE_RESPONSE_HEADER_ATTACHMENT_KEY,
-                    )
-                {
-                    Self::update_headers(&mut response.headers, update_headers.clone())
-                }
-            });
-
-            Ok(HandlerStatus::new(Code::OK))
-        })
+        Ok(HandlerStatus::new(Code::OK))
     }
 }

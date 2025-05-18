@@ -6,31 +6,39 @@ pub mod jwt;
 pub mod proxy;
 pub mod traceability;
 mod validator;
+mod sanitizer;
 
-use std::collections::{hash_map, HashMap};
+use core::convert::Into;
+use core::prelude::rust_2024::Ok;
+use core::result::Result;
+use async_trait::async_trait;
+use idem_handler::exchange::Exchange;
+use idem_handler::factory::HandlerFactory;
+use idem_handler::handler::Handler;
+use idem_handler::status::{HandlerExecutionError, HandlerStatus};
+use idem_handler_config::config::{Config, DefaultConfigProvider, FileConfigProvider, ProviderType};
+//use std::collections::{hash_map, HashMap};
 use crate::implementation::jwt::handler::JwtValidationHandler;
 use crate::implementation::{
     cors::handler::CorsHandler, header::handler::HeaderHandler,
     health::handler::HealthCheckHandler, proxy::handler::LambdaProxyHandler,
     traceability::handler::TraceabilityHandler,
 };
-use idem_config::config::{
-    Config, DefaultConfigProvider, FileConfigProvider, ProviderType,
-};
-use idem_handler::exchange::Exchange;
-use idem_handler::factory::HandlerFactory;
-use idem_handler::handler::Handler;
-use idem_handler::status::{HandlerExecutionError, HandlerStatus};
+//use idem_config::config::{
+//    Config, DefaultConfigProvider, FileConfigProvider, ProviderType,
+//};
+//use idem_handler::exchange::Exchange;
+//use idem_handler::factory::HandlerFactory;
+//use idem_handler::handler::Handler;
+//use idem_handler::status::{HandlerExecutionError, HandlerStatus};
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::Context;
-use std::future::Future;
-use std::pin::Pin;
+//use std::future::Future;
+//use std::pin::Pin;
 use lambda_http::http::HeaderMap;
 use crate::ROOT_CONFIG_PATH;
 
 pub type LambdaExchange = Exchange<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>;
-pub type HandlerOutput<'a> =
-    Pin<Box<dyn Future<Output = Result<HandlerStatus, HandlerExecutionError>> + Send + 'a>>;
 
 pub enum LambdaHandler {
     ProxyHandler(LambdaProxyHandler),
@@ -41,23 +49,20 @@ pub enum LambdaHandler {
     JwtValidationHandler(JwtValidationHandler),
 }
 
+#[async_trait]
 impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for LambdaHandler {
-    fn exec<'handler, 'exchange, 'result>(
-        &'handler self,
-        exchange: &'exchange mut LambdaExchange,
-    ) -> HandlerOutput<'result>
-    where
-        'handler: 'result,
-        'exchange: 'result,
-        Self: 'result,
+    async fn exec(
+        &self,
+        exchange: & mut LambdaExchange,
+    ) -> Result<HandlerStatus, HandlerExecutionError>
     {
         match self {
-            LambdaHandler::ProxyHandler(handler) => handler.exec(exchange),
-            LambdaHandler::CorsHandler(handler) => handler.exec(exchange),
-            LambdaHandler::HeaderHandler(handler) => handler.exec(exchange),
-            LambdaHandler::TraceabilityHandler(handler) => handler.exec(exchange),
-            LambdaHandler::HealthCheckHandler(handler) => handler.exec(exchange),
-            LambdaHandler::JwtValidationHandler(handler) => handler.exec(exchange),
+            LambdaHandler::ProxyHandler(handler) => handler.exec(exchange).await,
+            LambdaHandler::CorsHandler(handler) => handler.exec(exchange).await,
+            LambdaHandler::HeaderHandler(handler) => handler.exec(exchange).await,
+            LambdaHandler::TraceabilityHandler(handler) => handler.exec(exchange).await,
+            LambdaHandler::HealthCheckHandler(handler) => handler.exec(exchange).await,
+            LambdaHandler::JwtValidationHandler(handler) => handler.exec(exchange).await,
         }
     }
 }

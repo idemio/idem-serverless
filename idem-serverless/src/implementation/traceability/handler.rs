@@ -1,12 +1,19 @@
-use crate::implementation::traceability::config::TraceabilityHandlerConfig;
-use crate::implementation::{Handler, HandlerOutput, LambdaExchange};
-use idem_config::config::Config;
+use core::clone::Clone;
+use core::option::Option;
+use core::prelude::rust_2024::{Err, None, Ok, Some};
+use core::result::Result;
+use core::todo;
+use async_trait::async_trait;
 use idem_handler::exchange::AttachmentKey;
-use idem_handler::status::{Code, HandlerStatus};
+use idem_handler::handler::Handler;
+use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
+use idem_handler_config::config::Config;
+use idem_handler_macro::ConfigurableHandler;
+use crate::implementation::traceability::config::TraceabilityHandlerConfig;
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::http::{HeaderMap, HeaderName, HeaderValue};
 use lambda_http::{tracing, Context};
-use idem_macro::ConfigurableHandler;
+use crate::implementation::LambdaExchange;
 
 #[derive(ConfigurableHandler)]
 pub struct TraceabilityHandler {
@@ -44,100 +51,96 @@ const CORR_V_ATTACHMENT_KEY: AttachmentKey = AttachmentKey("corr_v");
 const CORR_H_ATTACHMENT_KEY: AttachmentKey = AttachmentKey("corr_h");
 const TRACE_H_ATTACHMENT_KEY: AttachmentKey = AttachmentKey("trace_h");
 
+#[async_trait]
 impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for TraceabilityHandler {
-    fn exec<'handler, 'exchange, 'result>(
-        &'handler self,
-        exchange: &'exchange mut LambdaExchange,
-    ) -> HandlerOutput<'result>
-    where
-        'handler: 'result,
-        'exchange: 'result,
-        Self: 'result,
+    async fn exec(
+        &self,
+        exchange: &mut LambdaExchange,
+    ) -> Result<HandlerStatus, HandlerExecutionError>
     {
         tracing::debug!("Traceability handler starts");
-        Box::pin(async move {
-            if !self.config.get().enabled {
-                return Ok(HandlerStatus::new(Code::DISABLED));
-            }
+        if !self.config.get().enabled {
+            return Ok(HandlerStatus::new(Code::DISABLED));
+        }
 
-            let request = exchange.input().unwrap();
-            let cid_header_name = self.config.get().correlation_header_name.clone();
-            let cid = Self::find_or_create_uuid(
-                &request.headers,
-                &cid_header_name,
-                self.config.get().autogen_correlation_id,
-            );
+        let request = exchange.input().unwrap();
+        let cid_header_name = self.config.get().correlation_header_name.clone();
+        let cid = Self::find_or_create_uuid(
+            &request.headers,
+            &cid_header_name,
+            self.config.get().autogen_correlation_id,
+        );
 
-            let tid_header_name = self.config.get().traceability_header_name.clone();
-            let tid = Self::find_or_create_uuid(&request.headers, &tid_header_name, false);
+        let tid_header_name = self.config.get().traceability_header_name.clone();
+        let tid = Self::find_or_create_uuid(&request.headers, &tid_header_name, false);
 
-            if cid.is_some() {
-                let cid = cid.unwrap();
-                if tid.is_some() {
-                    let tid = tid.unwrap();
-                    tracing::info!(
+        if cid.is_some() {
+            let cid = cid.unwrap();
+            if tid.is_some() {
+                let tid = tid.unwrap();
+                tracing::info!(
                         "Associate traceability Id {} with correlation Id {}",
                         &tid,
                         &cid
                     );
 
-                    if self.config.get().add_trace_to_response {
-                        exchange
-                            .attachments_mut()
-                            .add_attachment::<String>(TRACE_V_ATTACHMENT_KEY, Box::new(tid));
-                        exchange
-                            .attachments_mut()
-                            .add_attachment::<String>(CORR_V_ATTACHMENT_KEY, Box::new(cid.clone()));
-                        exchange.attachments_mut().add_attachment::<String>(
-                            CORR_H_ATTACHMENT_KEY,
-                            Box::new(cid_header_name.clone()),
-                        );
-                        exchange.attachments_mut().add_attachment::<String>(
-                            TRACE_H_ATTACHMENT_KEY,
-                            Box::new(tid_header_name),
-                        );
-                        exchange.add_output_listener(|response, attachments| {
-                            if let (Some(cid_header), Some(cid_value)) = (
-                                attachments.attachment::<String>(CORR_H_ATTACHMENT_KEY),
-                                attachments.attachment::<String>(CORR_V_ATTACHMENT_KEY),
-                            ) {
-                                response.headers.insert(
-                                    HeaderName::from_bytes(cid_header.as_bytes()).unwrap(),
-                                    HeaderValue::from_str(cid_value).unwrap(),
-                                );
-                            }
+                if self.config.get().add_trace_to_response {
+                    exchange
+                        .attachments_mut()
+                        .add_attachment::<String>(TRACE_V_ATTACHMENT_KEY, Box::new(tid));
+                    exchange
+                        .attachments_mut()
+                        .add_attachment::<String>(CORR_V_ATTACHMENT_KEY, Box::new(cid.clone()));
+                    exchange.attachments_mut().add_attachment::<String>(
+                        CORR_H_ATTACHMENT_KEY,
+                        Box::new(cid_header_name.clone()),
+                    );
+                    exchange.attachments_mut().add_attachment::<String>(
+                        TRACE_H_ATTACHMENT_KEY,
+                        Box::new(tid_header_name),
+                    );
+                    exchange.add_output_listener(|response, attachments| {
+                        if let (Some(cid_header), Some(cid_value)) = (
+                            attachments.attachment::<String>(CORR_H_ATTACHMENT_KEY),
+                            attachments.attachment::<String>(CORR_V_ATTACHMENT_KEY),
+                        ) {
+                            response.headers.insert(
+                                HeaderName::from_bytes(cid_header.as_bytes()).unwrap(),
+                                HeaderValue::from_str(cid_value).unwrap(),
+                            );
+                        }
 
-                            if let (Some(tid_header), Some(tid_value)) = (
-                                attachments.attachment::<String>(TRACE_H_ATTACHMENT_KEY),
-                                attachments.attachment::<String>(TRACE_V_ATTACHMENT_KEY),
-                            ) {
-                                response.headers.insert(
-                                    HeaderName::from_bytes(tid_header.as_bytes()).unwrap(),
-                                    HeaderValue::from_str(tid_value).unwrap(),
-                                );
-                            }
-                        });
-                    }
+                        if let (Some(tid_header), Some(tid_value)) = (
+                            attachments.attachment::<String>(TRACE_H_ATTACHMENT_KEY),
+                            attachments.attachment::<String>(TRACE_V_ATTACHMENT_KEY),
+                        ) {
+                            response.headers.insert(
+                                HeaderName::from_bytes(tid_header.as_bytes()).unwrap(),
+                                HeaderValue::from_str(tid_value).unwrap(),
+                            );
+                        }
+                    });
                 }
-
-                let inserted_header_name: HeaderName =
-                    HeaderName::from_lowercase(cid_header_name.to_lowercase().as_bytes()).unwrap();
-                let inserted_header_value: HeaderValue =
-                    HeaderValue::from_str(cid.as_str()).unwrap();
-                exchange
-                    .input_mut()
-                    .unwrap()
-                    .headers
-                    .insert(inserted_header_name, inserted_header_value);
             }
 
-            Ok(HandlerStatus::new(Code::OK))
-        })
+            let inserted_header_name: HeaderName =
+                HeaderName::from_lowercase(cid_header_name.to_lowercase().as_bytes()).unwrap();
+            let inserted_header_value: HeaderValue =
+                HeaderValue::from_str(cid.as_str()).unwrap();
+            exchange
+                .input_mut()
+                .unwrap()
+                .headers
+                .insert(inserted_header_name, inserted_header_value);
+        }
+
+        Ok(HandlerStatus::new(Code::OK))
     }
 }
 
 #[cfg(test)]
 mod test {
+    use core::{assert, assert_eq};
     use crate::implementation::traceability::handler::TraceabilityHandler;
     use lambda_http::http::{HeaderMap, HeaderName, HeaderValue};
 

@@ -74,6 +74,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-trait"
+version = "0.1.88"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e539d3fca749fcee5236ab05e93a52867dd549cc157c8cb7f99595f3cedffdb5"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1484,8 +1495,21 @@ dependencies = [
 ]
 
 [[package]]
-name = "idem-config"
+name = "idem-handler"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "252022965e4c85f368e26d88844a7f3279b4ef33b02d8ad3013d183c7012ac69"
+dependencies = [
+ "async-trait",
+ "fnv",
+ "idem-handler-config",
+]
+
+[[package]]
+name = "idem-handler-config"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e54c922d34f3785d4dcab4638b916bedbcfef172855e39d268452300e9be5c5b"
 dependencies = [
  "dashmap",
  "once_cell",
@@ -1494,30 +1518,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "idem-encoder"
+name = "idem-handler-macro"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e0ae17cb76ddb36e2c21c9492ddeaba226938ad633362b54f30986c5beac52bb"
 dependencies = [
- "log",
-]
-
-[[package]]
-name = "idem-error"
-version = "0.1.0"
-
-[[package]]
-name = "idem-handler"
-version = "0.1.0"
-dependencies = [
- "idem-config",
- "idem-macro",
- "tokio",
-]
-
-[[package]]
-name = "idem-macro"
-version = "0.1.0"
-dependencies = [
- "idem-config",
  "quote",
  "syn",
 ]
@@ -1528,7 +1533,6 @@ version = "0.1.0"
 dependencies = [
  "dashmap",
  "http 1.3.1",
- "idem-config",
  "jsonschema",
  "oas3 0.16.1",
  "once_cell",
@@ -1540,12 +1544,13 @@ dependencies = [
 name = "idem-serverless"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "aws-config",
  "aws-sdk-lambda",
  "base64 0.22.1",
- "idem-config",
  "idem-handler",
- "idem-macro",
+ "idem-handler-config",
+ "idem-handler-macro",
  "idem-openapi",
  "jsonwebtoken",
  "lambda_http",
@@ -1553,6 +1558,7 @@ dependencies = [
  "rsa",
  "serde",
  "serde_json",
+ "tiny-clean",
  "tokio",
  "tracing",
  "uuid",
@@ -2914,6 +2920,12 @@ dependencies = [
  "num-conv",
  "time-core",
 ]
+
+[[package]]
+name = "tiny-clean"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1ab43167f5985483071f788ad17fadd047570489ea89e302ff0622076cff8963"
 
 [[package]]
 name = "tinystr"

@@ -1,13 +1,15 @@
+use core::prelude::rust_2024::{Err, Ok, Some};
+use core::result::Result;
+use core::todo;
+use async_trait::async_trait;
+use idem_handler::handler::Handler;
+use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
+use idem_handler_config::config::Config;
+use idem_handler_macro::ConfigurableHandler;
 use crate::implementation::jwt::config::JwtValidationHandlerConfig;
 use crate::implementation::jwt::jwk_provider::JwkProvider;
 use crate::implementation::jwt::{AUTH_HEADER_NAME, BEARER_PREFIX};
-use crate::implementation::{HandlerOutput, LambdaExchange};
-use crate::ROOT_CONFIG_PATH;
-use idem_config::config::{Config, ConfigProvider};
-use idem_handler::handler::Handler;
-use idem_handler::status::{Code, HandlerStatus};
-use idem_macro::ConfigurableHandler;
-use idem_openapi::OpenApiValidator;
+use crate::implementation::{LambdaExchange};
 use jsonwebtoken::jwk::{AlgorithmParameters, JwkSet};
 use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation};
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
@@ -66,141 +68,136 @@ impl JwtValidationHandler {
     }
 }
 
+#[async_trait]
 impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for JwtValidationHandler {
-    fn exec<'handler, 'exchange, 'result>(
-        &'handler self,
-        exchange: &'exchange mut LambdaExchange,
-    ) -> HandlerOutput<'result>
-    where
-        'handler: 'result,
-        'exchange: 'result,
-        Self: 'result,
+    async fn exec(
+        &self,
+        exchange: &mut LambdaExchange,
+    ) ->  Result<HandlerStatus, HandlerExecutionError>
     {
-        Box::pin(async move {
-            if !self.config.get().enabled {
-                return Ok(HandlerStatus::new(Code::DISABLED));
+        if !self.config.get().enabled {
+            return Ok(HandlerStatus::new(Code::DISABLED));
+        }
+
+        let request = match exchange.input() {
+            Ok(req) => req,
+            Err(_) => {
+                return Ok(
+                    HandlerStatus::new(Code::SERVER_ERROR).set_message("Unable to get request")
+                )
+            }
+        };
+
+        if let Some((_, auth_header_value)) = &request
+            .headers
+            .iter()
+            .find(|(header_key, _)| header_key.to_string().to_lowercase() == AUTH_HEADER_NAME)
+        {
+            let auth_header_parts = auth_header_value
+                .to_str()
+                .unwrap()
+                .split(' ')
+                .collect::<Vec<&str>>();
+
+            if auth_header_parts.len() != 2
+                || !(auth_header_parts[0].to_lowercase() == BEARER_PREFIX)
+            {
+                return Ok(HandlerStatus::new(Code::CLIENT_ERROR)
+                    .set_message("Missing client bearer token header"));
             }
 
-            let request = match exchange.input() {
-                Ok(req) => req,
+            let token = auth_header_parts[1];
+
+            let jwk_set = match self.fetch_jwk() {
+                Ok(jwk_set) => jwk_set,
                 Err(_) => {
-                    return Ok(
-                        HandlerStatus::new(Code::SERVER_ERROR).set_message("Unable to get request")
-                    )
+                    return Ok(HandlerStatus::new(Code::SERVER_ERROR)
+                        .set_message("Unable to fetch JWKs"))
                 }
             };
 
-            if let Some((_, auth_header_value)) = &request
-                .headers
-                .iter()
-                .find(|(header_key, _)| header_key.to_string().to_lowercase() == AUTH_HEADER_NAME)
-            {
-                let auth_header_parts = auth_header_value
-                    .to_str()
-                    .unwrap()
-                    .split(' ')
-                    .collect::<Vec<&str>>();
-
-                if auth_header_parts.len() != 2
-                    || !(auth_header_parts[0].to_lowercase() == BEARER_PREFIX)
-                {
+            let header = match decode_header(token) {
+                Ok(jwt_header) => jwt_header,
+                Err(_) => {
                     return Ok(HandlerStatus::new(Code::CLIENT_ERROR)
-                        .set_message("Missing client bearer token header"));
+                        .set_message("Malformed JWT header"))
                 }
+            };
 
-                let token = auth_header_parts[1];
+            let kid = match header.kid {
+                Some(kid) => kid,
+                None => {
+                    return Ok(HandlerStatus::new(Code::CLIENT_ERROR)
+                        .set_message("JWT is missing kid"))
+                }
+            };
 
-                let jwk_set = match self.fetch_jwk() {
-                    Ok(jwk_set) => jwk_set,
-                    Err(_) => {
-                        return Ok(HandlerStatus::new(Code::SERVER_ERROR)
-                            .set_message("Unable to fetch JWKs"))
-                    }
-                };
-
-                let header = match decode_header(token) {
-                    Ok(jwt_header) => jwt_header,
-                    Err(_) => {
-                        return Ok(HandlerStatus::new(Code::CLIENT_ERROR)
-                            .set_message("Malformed JWT header"))
-                    }
-                };
-
-                let kid = match header.kid {
-                    Some(kid) => kid,
-                    None => {
-                        return Ok(HandlerStatus::new(Code::CLIENT_ERROR)
-                            .set_message("JWT is missing kid"))
-                    }
-                };
-
-                let matching_jwk = match jwk_set.find(&kid) {
-                    Some(matching_jwk) => matching_jwk,
-                    None => {
-                        return Ok(HandlerStatus::new(Code::CLIENT_ERROR)
-                            .set_message("No matching JWK for kid"))
-                    }
-                };
-                let decoding_key = match &matching_jwk.algorithm {
-                    AlgorithmParameters::RSA(rsa_params) => {
-                        match DecodingKey::from_rsa_components(&rsa_params.n, &rsa_params.e) {
-                            Ok(decoding_key) => decoding_key,
-                            Err(_) => {
-                                return Ok(HandlerStatus::new(Code::CLIENT_ERROR)
-                                    .set_message("Malformed RSA key"))
-                            }
+            let matching_jwk = match jwk_set.find(&kid) {
+                Some(matching_jwk) => matching_jwk,
+                None => {
+                    return Ok(HandlerStatus::new(Code::CLIENT_ERROR)
+                        .set_message("No matching JWK for kid"))
+                }
+            };
+            let decoding_key = match &matching_jwk.algorithm {
+                AlgorithmParameters::RSA(rsa_params) => {
+                    match DecodingKey::from_rsa_components(&rsa_params.n, &rsa_params.e) {
+                        Ok(decoding_key) => decoding_key,
+                        Err(_) => {
+                            return Ok(HandlerStatus::new(Code::CLIENT_ERROR)
+                                .set_message("Malformed RSA key"))
                         }
                     }
-                    _ => {
-                        return Ok(HandlerStatus::new(Code::CLIENT_ERROR)
-                            .set_message("Unsupported JWT algorithm"))
-                    }
-                };
-
-                let validation = Validation::new(Algorithm::RS256);
-                let token_data = match decode::<Value>(token, &decoding_key, &validation) {
-                    Ok(token_data) => token_data,
-                    Err(_) => {
-                        return Ok(HandlerStatus::new(Code::CLIENT_ERROR).set_message("Invalid JWT"))
-                    }
-                };
-
-                let claims = token_data.claims;
-                let (request_path, method) = match (&request.path, &request.http_method) {
-                    (None, _) => {
-                        return Ok(HandlerStatus::new(Code::CLIENT_ERROR)
-                            .set_message("Missing request path"))
-                    }
-                    (Some(path), method) => (path, method),
-                };
-
-                if self.config.get().scope_verification {
-                    if let Err(_) = self.validate_scope(&request_path, &method.to_string(), &claims)
-                    {
-                        return Ok(HandlerStatus::new(Code::CLIENT_ERROR)
-                            .set_message("Invalid scope for token"));
-                    }
                 }
-
-                if let Err(_) = self.validate_aud(&claims) {
+                _ => {
                     return Ok(HandlerStatus::new(Code::CLIENT_ERROR)
-                        .set_message("Invalid audience for token"));
+                        .set_message("Unsupported JWT algorithm"))
                 }
+            };
 
-                if let Err(_) = self.validate_iss(&claims) {
+            let validation = Validation::new(Algorithm::RS256);
+            let token_data = match decode::<Value>(token, &decoding_key, &validation) {
+                Ok(token_data) => token_data,
+                Err(_) => {
+                    return Ok(HandlerStatus::new(Code::CLIENT_ERROR).set_message("Invalid JWT"))
+                }
+            };
+
+            let claims = token_data.claims;
+            let (request_path, method) = match (&request.path, &request.http_method) {
+                (None, _) => {
                     return Ok(HandlerStatus::new(Code::CLIENT_ERROR)
-                        .set_message("Invalid issuer for token"));
+                        .set_message("Missing request path"))
                 }
+                (Some(path), method) => (path, method),
+            };
 
-                if let Err(_) = self.validate_exp(&claims) {
-                    return Ok(HandlerStatus::new(Code::CLIENT_ERROR).set_message("Expired token"));
+            if self.config.get().scope_verification {
+                if let Err(_) = self.validate_scope(&request_path, &method.to_string(), &claims)
+                {
+                    return Ok(HandlerStatus::new(Code::CLIENT_ERROR)
+                        .set_message("Invalid scope for token"));
                 }
-
-                Ok(HandlerStatus::new(Code::OK))
-            } else {
-                return Ok(HandlerStatus::new(Code::CLIENT_ERROR).set_message("Missing JWT"));
             }
-        })
+
+            if let Err(_) = self.validate_aud(&claims) {
+                return Ok(HandlerStatus::new(Code::CLIENT_ERROR)
+                    .set_message("Invalid audience for token"));
+            }
+
+            if let Err(_) = self.validate_iss(&claims) {
+                return Ok(HandlerStatus::new(Code::CLIENT_ERROR)
+                    .set_message("Invalid issuer for token"));
+            }
+
+            if let Err(_) = self.validate_exp(&claims) {
+                return Ok(HandlerStatus::new(Code::CLIENT_ERROR).set_message("Expired token"));
+            }
+
+            Ok(HandlerStatus::new(Code::OK))
+        } else {
+            return Ok(HandlerStatus::new(Code::CLIENT_ERROR).set_message("Missing JWT"));
+        }
     }
 }
 
@@ -209,10 +206,10 @@ mod test {
     use crate::implementation::jwt::handler::JwtValidationHandler;
     use base64::prelude::BASE64_URL_SAFE_NO_PAD;
     use base64::Engine;
-    use idem_config::config::{Config, DefaultConfigProvider};
-    use idem_handler::exchange::Exchange;
-    use idem_handler::handler::Handler;
-    use idem_handler::status::Code;
+    //use idem_config::config::{Config, DefaultConfigProvider};
+    //use idem_handler::exchange::Exchange;
+    //use idem_handler::handler::Handler;
+    //use idem_handler::status::Code;
     use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
     use lambda_http::aws_lambda_events::apigw::ApiGatewayProxyRequest;
     use lambda_http::http::HeaderValue;
@@ -221,6 +218,10 @@ mod test {
     use serde::{Deserialize, Serialize};
     use std::error::Error;
     use std::fs::File;
+    use idem_handler::exchange::Exchange;
+    use idem_handler::handler::Handler;
+    use idem_handler::status::Code;
+    use idem_handler_config::config::{Config, DefaultConfigProvider};
     use crate::implementation::LambdaExchange;
 
     fn b64_decode(s: &str) -> Result<Vec<u8>, Box<dyn Error>> {

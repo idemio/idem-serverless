@@ -4,7 +4,7 @@ use core::prelude::rust_2024::Ok;
 use core::result::Result;
 use core::todo;
 use std::sync::Arc;
-use crate::implementation::{LambdaExchange, LambdaHandlerExecutor, LambdaHandlerFactory};
+use crate::handler::{LambdaExchange, LambdaHandlerExecutor, LambdaHandlerFactory};
 use idem_handler_config::config::{ ProviderType};
 use idem_handler::exchange::Exchange;
 use idem_handler::handler::Handler;

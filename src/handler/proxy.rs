@@ -1,6 +1,7 @@
+use std::collections::HashMap;
+use serde::{Deserialize};
 use std::ops::Add;
 use async_trait::async_trait;
-use crate::implementation::proxy::config::LambdaProxyHandlerConfig;
 use aws_config::BehaviorVersion;
 use aws_sdk_lambda::primitives::Blob;
 use aws_sdk_lambda::Client as LambdaClient;
@@ -10,7 +11,15 @@ use idem_handler_config::config::Config;
 use idem_handler_macro::ConfigurableHandler;
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::Context;
-use crate::implementation::LambdaExchange;
+use crate::handler::LambdaExchange;
+
+#[derive(Deserialize, Default)]
+pub(crate) struct LambdaProxyHandlerConfig {
+    pub enabled: bool,
+    pub functions: HashMap<String, String>
+}
+
+
 
 const FUNCTION_NAME_SEPARATOR: &str = "@";
 
@@ -46,7 +55,7 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for Lambd
                 let method = request.http_method;
                 let function_key = path.add(FUNCTION_NAME_SEPARATOR).add(method.as_str());
                 let function_name = match self.config.get().functions.get(&function_key) {
-                    _ => {
+                    None => {
                         return Ok(HandlerStatus::new(Code::CLIENT_ERROR)
                             .set_message("No function found for path and method combination."))
                     }

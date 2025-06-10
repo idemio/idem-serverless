@@ -1,19 +1,35 @@
-use core::clone::Clone;
-use core::option::Option;
-use core::prelude::rust_2024::{Err, None, Ok, Some};
-use core::result::Result;
-use core::todo;
 use async_trait::async_trait;
 use idem_handler::exchange::AttachmentKey;
 use idem_handler::handler::Handler;
 use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
 use idem_handler_config::config::Config;
 use idem_handler_macro::ConfigurableHandler;
-use crate::implementation::traceability::config::TraceabilityHandlerConfig;
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::http::{HeaderMap, HeaderName, HeaderValue};
-use lambda_http::{tracing, Context};
-use crate::implementation::LambdaExchange;
+use lambda_http::{Context, tracing};
+use serde::Deserialize;
+use crate::handler::LambdaExchange;
+
+#[derive(Deserialize)]
+pub struct TraceabilityHandlerConfig {
+    pub enabled: bool,
+    pub autogen_correlation_id: bool,
+    pub correlation_header_name: String,
+    pub traceability_header_name: String,
+    pub add_trace_to_response: bool,
+}
+
+impl Default for TraceabilityHandlerConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            autogen_correlation_id: true,
+            traceability_header_name: "x-trace".into(),
+            correlation_header_name: "x-correlation".into(),
+            add_trace_to_response: true,
+        }
+    }
+}
 
 #[derive(ConfigurableHandler)]
 pub struct TraceabilityHandler {
@@ -21,7 +37,6 @@ pub struct TraceabilityHandler {
 }
 
 impl TraceabilityHandler {
-
     fn find_or_create_uuid(
         headers: &HeaderMap,
         header_name: &str,
@@ -56,8 +71,7 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for Trace
     async fn exec(
         &self,
         exchange: &mut LambdaExchange,
-    ) -> Result<HandlerStatus, HandlerExecutionError>
-    {
+    ) -> Result<HandlerStatus, HandlerExecutionError> {
         tracing::debug!("Traceability handler starts");
         if !self.config.get().enabled {
             return Ok(HandlerStatus::new(Code::DISABLED));
@@ -79,10 +93,10 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for Trace
             if tid.is_some() {
                 let tid = tid.unwrap();
                 tracing::info!(
-                        "Associate traceability Id {} with correlation Id {}",
-                        &tid,
-                        &cid
-                    );
+                    "Associate traceability Id {} with correlation Id {}",
+                    &tid,
+                    &cid
+                );
 
                 if self.config.get().add_trace_to_response {
                     exchange
@@ -125,8 +139,7 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for Trace
 
             let inserted_header_name: HeaderName =
                 HeaderName::from_lowercase(cid_header_name.to_lowercase().as_bytes()).unwrap();
-            let inserted_header_value: HeaderValue =
-                HeaderValue::from_str(cid.as_str()).unwrap();
+            let inserted_header_value: HeaderValue = HeaderValue::from_str(cid.as_str()).unwrap();
             exchange
                 .input_mut()
                 .unwrap()
@@ -141,8 +154,8 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for Trace
 #[cfg(test)]
 mod test {
     use core::{assert, assert_eq};
-    use crate::implementation::traceability::handler::TraceabilityHandler;
     use lambda_http::http::{HeaderMap, HeaderName, HeaderValue};
+    use crate::handler::traceability::TraceabilityHandler;
 
     #[test]
     fn test_correlation_id() {

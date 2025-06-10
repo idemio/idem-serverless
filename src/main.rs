@@ -1,7 +1,7 @@
 use core::result::Result;
 use idem_handler_config::config_cache::init_or_replace_config;
 use lambda_http::{lambda_runtime, service_fn, tracing, Error};
-mod implementation;
+mod handler;
 mod entry;
 
 use entry::entry;

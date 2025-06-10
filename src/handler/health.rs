@@ -1,6 +1,5 @@
+use serde::Deserialize;
 use async_trait::async_trait;
-use crate::implementation::health::config::HealthCheckHandlerConfig;
-use crate::implementation::{LambdaExchange};
 use aws_sdk_lambda::config::BehaviorVersion;
 use aws_sdk_lambda::primitives::Blob;
 use aws_sdk_lambda::Client as LambdaClient;
@@ -11,6 +10,19 @@ use idem_handler_macro::ConfigurableHandler;
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::http::header::CONTENT_TYPE;
 use lambda_http::Context;
+use crate::handler::LambdaExchange;
+
+#[derive(Deserialize, Default)]
+pub struct HealthCheckHandlerConfig {
+    pub enabled: bool,
+    pub use_json: bool,
+    pub timeout: u32,
+    pub downstream_enabled: bool,
+    pub downstream_function: String,
+    pub downstream_function_health_payload: String,
+}
+
+
 
 const HEALTH_STATUS: u32 = 200u32;
 const HEALTH_BODY: &str = "OK";

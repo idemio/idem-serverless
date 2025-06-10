@@ -4,13 +4,13 @@
     <content url="file://$MODULE_DIR$">
       <sourceFolder url="file://$MODULE_DIR$/idem-config/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/idem-handler/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/idem-serverless/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/idem-serverless/src/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/idem-macro/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/idem-error/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/idem-openapi/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/idem-encoder/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/idem-encoder/benches" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/src/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/idem-handler/target" />
       <excludeFolder url="file://$MODULE_DIR$/idem-serverless/target" />
       <excludeFolder url="file://$MODULE_DIR$/target" />

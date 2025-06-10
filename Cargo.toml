@@ -1,4 +1,29 @@
+[package]
+name = "idem-serverless"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+authors = ["Kalev Gonvick kalev.gonvick@idemio.dev"]
 
-[workspace]
-resolver = "2"
-members = [ "idem-openapi", "idem-serverless"]
+
+[profile.release]
+opt-level = 3
+
+[dependencies]
+idem-handler-config = {version = "0.1.0"}
+idem-handler-macro = {version = "0.1.0"}
+tiny-clean = {version = "0.1.0"}
+oasert = { version = "0.1.2" }
+idem-handler = {version = "0.1.0"}
+lambda_http = "0.14.0"
+aws-sdk-lambda = "1.73.0"
+aws-config = "1.6.0"
+serde_json = "1.0.140"
+serde = { version = "1.0.219", features = ["derive"] }
+tokio = { version = "1.44.1", features = ["macros"] }
+base64 = { version = "0.22", features = ["alloc"] }
+uuid = { version = "1.16.0", features = ["v4"] }
+jsonwebtoken = { version = "9.3.1" }
+rsa = { version = "0.9.8" , features = ["pem", "pkcs5"]  }
+tracing = "0.1.41"
+async-trait = "0.1.88"

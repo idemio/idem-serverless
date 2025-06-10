@@ -1,20 +1,98 @@
-use core::prelude::rust_2024::{Err, Ok, Some};
-use core::result::Result;
-use core::todo;
+use serde::Deserialize;
+use idem_handler_config::config_cache::get_file;
 use async_trait::async_trait;
 use idem_handler::handler::Handler;
 use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
 use idem_handler_config::config::Config;
 use idem_handler_macro::ConfigurableHandler;
-use crate::implementation::jwt::config::JwtValidationHandlerConfig;
-use crate::implementation::jwt::jwk_provider::JwkProvider;
-use crate::implementation::jwt::{AUTH_HEADER_NAME, BEARER_PREFIX};
-use crate::implementation::{LambdaExchange};
 use jsonwebtoken::jwk::{AlgorithmParameters, JwkSet};
 use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation};
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::Context;
 use serde_json::Value;
+use crate::handler::LambdaExchange;
+
+#[derive(Deserialize)]
+pub struct JwtValidationHandlerConfig {
+    pub enabled: bool,
+    pub jwk_provider: JwkProviders,
+    pub scope_verification: bool,
+    pub specification_name: String,
+    pub ignore_jwt_expiration: bool,
+    pub audience: String,
+
+}
+
+impl Default for JwtValidationHandlerConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            jwk_provider: JwkProviders::default(),
+            scope_verification: false,
+            ignore_jwt_expiration: false,
+            specification_name: "openapi.yaml".to_string(),
+            audience: "https://issuer.example.com".to_string(),
+        }
+    }
+}
+
+
+
+pub trait JwkProvider {
+    fn jwk(&self) -> Result<JwkSet, ()>;
+}
+
+#[derive(Deserialize, Default)]
+pub struct LocalJwkProvider {
+    file_name: String,
+    file_path: String,
+}
+
+impl JwkProvider for LocalJwkProvider {
+    fn jwk(&self) -> Result<JwkSet, ()> {
+        let file = get_file(&format!("{}/{}", self.file_path, self.file_name)).unwrap();
+        serde_json::from_str(&file).or(Err(()))
+    }
+}
+
+#[derive(Deserialize, Default)]
+pub struct RemoteJwkProvider {
+    jwk_server_url: String,
+    jwk_server_path: String,
+}
+
+impl JwkProvider for RemoteJwkProvider {
+    fn jwk(&self) -> Result<JwkSet, ()> {
+        todo!()
+    }
+}
+
+#[derive(Deserialize)]
+pub enum JwkProviders {
+    RemoteJwkProvider(RemoteJwkProvider),
+    LocalJwkProvider(LocalJwkProvider),
+}
+
+impl Default for JwkProviders {
+    fn default() -> Self {
+        Self::LocalJwkProvider(LocalJwkProvider {
+            file_name: String::from("jwks.json"),
+            file_path: String::from("./config"),
+        })
+    }
+}
+
+impl JwkProvider for JwkProviders {
+    fn jwk(&self) -> Result<JwkSet, ()> {
+        match self {
+            JwkProviders::LocalJwkProvider(local) => local.jwk(),
+
+            JwkProviders::RemoteJwkProvider(remote) => remote.jwk(),
+        }
+    }
+}
+
+
 
 #[derive(ConfigurableHandler)]
 pub struct JwtValidationHandler {
@@ -28,31 +106,31 @@ impl JwtValidationHandler {
 
     fn validate_scope(&self, request_path: &str, method: &str, claims: &Value) -> Result<(), ()> {
         todo!()
-//        let spec_validator =
-//            OpenApiValidator::from_file(&format!("{}/{}", ROOT_CONFIG_PATH, "openapi.json"));
-//        let schemas = spec_validator.get_security_scopes(request_path, method);
-//        let token_scopes = match claims.get("scope") {
-//            None => return Err(()),
-//            Some(scope) => {
-//                if let Some(scope) = scope.as_str() {
-//                    scope.split(' ').collect::<Vec<&str>>()
-//                } else {
-//                    return Err(());
-//                }
-//            }
-//        };
-//        if let Some(schemas) = schemas {
-//            for (_, scopes) in schemas {
-//                let potential_matched_scope = scopes.iter().find(|scope| {
-//                    token_scopes.iter().any(|token_scope| scope == token_scope)
-//                });
-//
-//                if potential_matched_scope.is_some() {
-//                    return Ok(());
-//                }
-//            }
-//        }
-//        Err(())
+        //        let spec_validator =
+        //            OpenApiValidator::from_file(&format!("{}/{}", ROOT_CONFIG_PATH, "openapi.json"));
+        //        let schemas = spec_validator.get_security_scopes(request_path, method);
+        //        let token_scopes = match claims.get("scope") {
+        //            None => return Err(()),
+        //            Some(scope) => {
+        //                if let Some(scope) = scope.as_str() {
+        //                    scope.split(' ').collect::<Vec<&str>>()
+        //                } else {
+        //                    return Err(());
+        //                }
+        //            }
+        //        };
+        //        if let Some(schemas) = schemas {
+        //            for (_, scopes) in schemas {
+        //                let potential_matched_scope = scopes.iter().find(|scope| {
+        //                    token_scopes.iter().any(|token_scope| scope == token_scope)
+        //                });
+        //
+        //                if potential_matched_scope.is_some() {
+        //                    return Ok(());
+        //                }
+        //            }
+        //        }
+        //        Err(())
     }
 
     fn validate_aud(&self, claims: &Value) -> Result<(), ()> {
@@ -91,7 +169,7 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for JwtVa
         if let Some((_, auth_header_value)) = &request
             .headers
             .iter()
-            .find(|(header_key, _)| header_key.to_string().to_lowercase() == AUTH_HEADER_NAME)
+            .find(|(header_key, _)| header_key.to_string().to_lowercase() == "Authorization")
         {
             let auth_header_parts = auth_header_value
                 .to_str()
@@ -100,7 +178,7 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for JwtVa
                 .collect::<Vec<&str>>();
 
             if auth_header_parts.len() != 2
-                || !(auth_header_parts[0].to_lowercase() == BEARER_PREFIX)
+                || !(auth_header_parts[0].to_lowercase() == "Bearer")
             {
                 return Ok(HandlerStatus::new(Code::CLIENT_ERROR)
                     .set_message("Missing client bearer token header"));
@@ -203,13 +281,8 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for JwtVa
 
 #[cfg(test)]
 mod test {
-    use crate::implementation::jwt::handler::JwtValidationHandler;
     use base64::prelude::BASE64_URL_SAFE_NO_PAD;
     use base64::Engine;
-    //use idem_config::config::{Config, DefaultConfigProvider};
-    //use idem_handler::exchange::Exchange;
-    //use idem_handler::handler::Handler;
-    //use idem_handler::status::Code;
     use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
     use lambda_http::aws_lambda_events::apigw::ApiGatewayProxyRequest;
     use lambda_http::http::HeaderValue;
@@ -222,7 +295,8 @@ mod test {
     use idem_handler::handler::Handler;
     use idem_handler::status::Code;
     use idem_handler_config::config::{Config, DefaultConfigProvider};
-    use crate::implementation::LambdaExchange;
+    use crate::handler::jwt::{JwkProvider, JwtValidationHandler, JwtValidationHandlerConfig};
+    use crate::handler::LambdaExchange;
 
     fn b64_decode(s: &str) -> Result<Vec<u8>, Box<dyn Error>> {
         Ok(BASE64_URL_SAFE_NO_PAD.decode(s)?)
@@ -244,7 +318,7 @@ mod test {
     }
 
     fn get_test_key_gen() -> String {
-        let test_file = File::open("./src/implementation/jwt/test/public_private_keypair.json");
+        let test_file = File::open("./src/handler/jwt/test/public_private_keypair.json");
         let jwk: serde_json::Value = serde_json::from_reader(test_file.unwrap()).unwrap();
         let private_key = rsa_private_key_from_jwk(&jwk).unwrap();
         let der = private_key.to_pkcs1_der().unwrap().as_bytes().to_vec();
@@ -335,4 +409,30 @@ mod test {
             assert!(false)
         }
     }
+
+    #[test]
+    fn load_jwk_file_test() {
+        let file = r#"
+        {
+            "enabled": true,
+            "scope_verification": false,
+            "ignore_jwt_expiration": false,
+            "specification_name": "openapi.yaml",
+            "jwk_provider": {
+                "LocalJwkProvider": {
+                    "file_name": "jwks.json",
+                    "file_path": "./config"
+                 }
+            },
+            "audience": "https://issuer.example.com"
+        }
+        "#;
+        let jwt_config: JwtValidationHandlerConfig = serde_json::from_str(file).unwrap();
+        assert!(jwt_config.enabled);
+        let jwk_set = jwt_config.jwk_provider.jwk().unwrap();
+        assert!(jwk_set.keys.iter().any(|jwk| jwk.clone().common.key_id.unwrap() == "DDbt045YVtnjCkzHUv-rFN4wPfGD3Upk9_da_yweZ1c"));
+    }
 }
+
+
+

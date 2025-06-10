@@ -1,19 +1,31 @@
-use crate::implementation::cors::config::CorsHandlerConfig;
+use std::collections::HashMap;
+use serde::{Deserialize, Serialize};
 use async_trait::async_trait;
 use idem_handler::exchange::AttachmentKey;
 use idem_handler::handler::Handler;
 use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
 use idem_handler_config::config::Config;
-//use crate::implementation::{Handler, HandlerOutput, LambdaExchange};
-//use idem_config::config::Config;
-//use idem_handler::exchange::AttachmentKey;
-//use idem_handler::status::{Code, HandlerStatus};
 use lambda_http::Context;
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::http::HeaderValue;
-//use idem_macro::ConfigurableHandler;
-use crate::implementation::LambdaExchange;
 use idem_handler_macro::ConfigurableHandler;
+use crate::handler::LambdaExchange;
+
+#[derive(Deserialize, Serialize, Default, Clone)]
+pub struct CorsHandlerConfig {
+    pub enabled: bool,
+    pub allowed_origins: Vec<String>,
+    pub allowed_methods: Vec<String>,
+    pub path_prefix_cors_config: HashMap<String, CorsHandlerPathConfig>,
+}
+
+#[derive(Deserialize, Serialize, Default, Clone)]
+pub struct CorsHandlerPathConfig {
+    pub allowed_origins: Vec<String>,
+    pub allowed_methods: Vec<String>,
+}
+
+
 
 const ORIGIN_HEADER_KEY: &str = "Origin";
 const ACCESS_CONTROL_REQUEST_METHOD: &str = "Access-Control-Request-Method";
@@ -144,7 +156,7 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for CorsH
                             .join(",")
                             .as_str(),
                     )
-                    .unwrap(),
+                        .unwrap(),
                 );
 
                 if let Some((_, ac_header_value)) =
@@ -206,7 +218,7 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for CorsH
 
 #[cfg(test)]
 mod test {
-    use crate::implementation::cors::handler::CorsHandler;
+    use crate::handler::cors::CorsHandler;
 
     #[test]
     fn test_default_port_filtering() {

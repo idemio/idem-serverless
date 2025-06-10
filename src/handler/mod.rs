@@ -17,25 +17,14 @@ use idem_handler::factory::HandlerFactory;
 use idem_handler::handler::Handler;
 use idem_handler::status::{HandlerExecutionError, HandlerStatus};
 use idem_handler_config::config::{Config, DefaultConfigProvider, FileConfigProvider, ProviderType};
-//use std::collections::{hash_map, HashMap};
-use crate::implementation::jwt::handler::JwtValidationHandler;
-use crate::implementation::{
-    cors::handler::CorsHandler, header::handler::HeaderHandler,
-    health::handler::HealthCheckHandler, proxy::handler::LambdaProxyHandler,
-    traceability::handler::TraceabilityHandler,
-};
-//use idem_config::config::{
-//    Config, DefaultConfigProvider, FileConfigProvider, ProviderType,
-//};
-//use idem_handler::exchange::Exchange;
-//use idem_handler::factory::HandlerFactory;
-//use idem_handler::handler::Handler;
-//use idem_handler::status::{HandlerExecutionError, HandlerStatus};
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::Context;
-//use std::future::Future;
-//use std::pin::Pin;
-use lambda_http::http::HeaderMap;
+use crate::handler::cors::CorsHandler;
+use crate::handler::header::HeaderHandler;
+use crate::handler::health::HealthCheckHandler;
+use crate::handler::jwt::JwtValidationHandler;
+use crate::handler::proxy::LambdaProxyHandler;
+use crate::handler::traceability::TraceabilityHandler;
 use crate::ROOT_CONFIG_PATH;
 
 pub type LambdaExchange = Exchange<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>;

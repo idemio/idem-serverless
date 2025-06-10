@@ -1,12 +1,21 @@
+use serde::Deserialize;
 use async_trait::async_trait;
-use crate::implementation::echo::config::EchoRequestHandlerConfig;
-use crate::implementation::LambdaExchange;
 use idem_handler::handler::Handler;
 use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
 use idem_handler_config::config::Config;
 use idem_handler_macro::ConfigurableHandler;
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::{Body, Context};
+use crate::handler::LambdaExchange;
+
+#[derive(Default, Deserialize)]
+pub struct EchoRequestHandlerConfig {
+    pub enabled: bool,
+    pub echo_headers: bool,
+    pub static_body: Option<String>
+}
+
+
 
 #[derive(ConfigurableHandler)]
 pub struct EchoRequestHandler {
@@ -52,3 +61,4 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for EchoR
         Ok(HandlerStatus::new(Code::OK))
     }
 }
+

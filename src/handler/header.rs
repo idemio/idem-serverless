@@ -1,21 +1,44 @@
-use core::iter::Extend;
-use core::prelude::rust_2024::{Ok, Some};
-use core::result::Result;
+use crate::handler::LambdaExchange;
 use async_trait::async_trait;
 use idem_handler::exchange::AttachmentKey;
 use idem_handler::handler::Handler;
 use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
 use idem_handler_config::config::Config;
 use idem_handler_macro::ConfigurableHandler;
-use std::collections::HashMap;
-
-use crate::implementation::header::config::{
-    HeaderHandlerConfig, ModifyHeaderKey, ModifyHeaderValue,
-};
-use crate::implementation::{LambdaExchange};
+use lambda_http::Context;
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::http::{HeaderMap, HeaderName, HeaderValue};
-use lambda_http::Context;
+use serde::Deserialize;
+use std::collections::HashMap;
+
+#[derive(Deserialize, Default, Clone, PartialOrd, PartialEq, Hash, Eq)]
+pub struct ModifyHeaderKey(pub String);
+
+#[derive(Deserialize, Default, Clone)]
+pub struct ModifyHeaderValue(pub String);
+
+#[derive(Deserialize, Default, PartialOrd, PartialEq, Hash, Eq)]
+pub struct PathPrefix(pub String);
+
+#[derive(Deserialize, Default)]
+pub struct HeaderHandlerConfig {
+    pub enabled: bool,
+    pub request: ModifyHeaderHandlerConfig,
+    pub response: ModifyHeaderHandlerConfig,
+    pub path_prefix_header: HashMap<PathPrefix, PathHeaderHandlerConfig>,
+}
+
+#[derive(Deserialize, Default)]
+pub struct PathHeaderHandlerConfig {
+    pub request: ModifyHeaderHandlerConfig,
+    pub response: ModifyHeaderHandlerConfig,
+}
+
+#[derive(Deserialize, Default)]
+pub struct ModifyHeaderHandlerConfig {
+    pub update: HashMap<ModifyHeaderKey, ModifyHeaderValue>,
+    pub remove: Vec<ModifyHeaderKey>,
+}
 
 #[derive(ConfigurableHandler)]
 pub struct HeaderHandler {
@@ -23,7 +46,6 @@ pub struct HeaderHandler {
 }
 
 impl HeaderHandler {
-
     fn remove_headers(headers: &mut HeaderMap, remove_headers: Vec<ModifyHeaderKey>) {
         for header in remove_headers {
             headers.remove(header.0).unwrap();
@@ -43,13 +65,17 @@ impl HeaderHandler {
     }
 }
 
-const REMOVE_RESPONSE_HEADER_ATTACHMENT_KEY: AttachmentKey = AttachmentKey("remove_response_headers");
-const UPDATE_RESPONSE_HEADER_ATTACHMENT_KEY: AttachmentKey = AttachmentKey("update_response_headers");
+const REMOVE_RESPONSE_HEADER_ATTACHMENT_KEY: AttachmentKey =
+    AttachmentKey("remove_response_headers");
+const UPDATE_RESPONSE_HEADER_ATTACHMENT_KEY: AttachmentKey =
+    AttachmentKey("update_response_headers");
 
 #[async_trait]
 impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for HeaderHandler {
-    async fn exec(&self, exchange: &mut LambdaExchange) -> Result<HandlerStatus, HandlerExecutionError>
-    {
+    async fn exec(
+        &self,
+        exchange: &mut LambdaExchange,
+    ) -> Result<HandlerStatus, HandlerExecutionError> {
         if !self.config.get().enabled {
             return Ok(HandlerStatus::new(Code::DISABLED));
         }

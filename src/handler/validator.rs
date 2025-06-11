@@ -1,20 +1,21 @@
-use serde::Deserialize;
 use crate::ROOT_CONFIG_PATH;
-use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
+use crate::handler::LambdaExchange;
 use async_trait::async_trait;
+use http::Request;
 use idem_handler::handler::Handler;
-use idem_handler::status::{HandlerExecutionError, HandlerStatus};
+use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
 use idem_handler_config::config::Config;
 use idem_handler_macro::ConfigurableHandler;
 use lambda_http::Context;
-use crate::handler::LambdaExchange;
+use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
+use serde::Deserialize;
 
 #[derive(Deserialize)]
 pub struct ValidatorHandlerConfig {
     pub enable: bool,
     pub validate_request: bool,
     pub validate_response: bool,
-    pub openapi_specification: String
+    pub openapi_specification: String,
 }
 
 impl Default for ValidatorHandlerConfig {
@@ -23,11 +24,10 @@ impl Default for ValidatorHandlerConfig {
             enable: true,
             validate_request: true,
             validate_response: false,
-            openapi_specification: "openapi.json".to_string()
+            openapi_specification: "openapi.json".to_string(),
         }
     }
 }
-
 
 #[derive(ConfigurableHandler)]
 pub struct ValidatorHandler {
@@ -39,14 +39,32 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for Valid
     async fn exec(
         &self,
         exchange: &mut LambdaExchange,
-    ) -> Result<HandlerStatus, HandlerExecutionError>
-    {
+    ) -> Result<HandlerStatus, HandlerExecutionError> {
+        if !self.config.get().enable {
+            return Ok(HandlerStatus::new(Code::DISABLED));
+        }
+
+        let request = exchange.input().unwrap();
+        let request_uri: String = format!(
+            "{}{}",
+            request.path.as_ref().unwrap_or(&String::from("/")),
+            request
+                .query_string_parameters
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, v))
+                .collect::<Vec<String>>()
+                .join("&")
+        );
+        let request = Request::builder()
+            .method(&request.http_method)
+            .uri(&request_uri)
+            .body(request.body.as_ref().unwrap_or(&String::from("")))
+            .unwrap();
+        
         todo!()
-        //        if !self.config.get().enable {
-        //            return Ok(HandlerStatus::new(Code::DISABLED));
-        //        }
+
         //
-        //        let spec = 
+        //        let spec =
         //        let validator = oasert::validator::OpenApiPayloadValidator::new();
         //
         //        if self.config.get().validate_request {
@@ -89,7 +107,7 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for Valid
         //        if self.config.get().validate_response {
         //            // TODO -  attach validator on response callback
         //        }
-//
-//        Ok(HandlerStatus::new(Code::OK))
+        //
+        //        Ok(HandlerStatus::new(Code::OK))
     }
 }

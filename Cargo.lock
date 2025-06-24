@@ -1909,9 +1909,9 @@ dependencies = [
 
 [[package]]
 name = "oasert"
-version = "0.1.2"
+version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d2eaa35cf8fddab4677aeaea7a7eabddef89e3a143dde92644eeb9efc5d4278"
+checksum = "75c70f87fc9576840ac2882109137faeb25b0b3323ead3ceb5257139ce3a6f72"
 dependencies = [
  "bytes",
  "dashmap",
@@ -1919,6 +1919,7 @@ dependencies = [
  "http-body-util",
  "jsonschema",
  "log",
+ "percent-encoding",
  "serde",
  "serde_json",
 ]

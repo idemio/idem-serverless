@@ -118,7 +118,7 @@ impl JwtValidationHandler {
             Ok(x) => x,
             Err(_) => return Err(()),
         };
-        let operation = match validator.traverser().get_operation(request_path, method) {
+        let operation = match validator.traverser().get_operation_from_path_and_method(request_path, method) {
             Ok(x) => x,
             Err(_) => return Err(()),
         };

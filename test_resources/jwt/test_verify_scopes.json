@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "jwk_provider": {
+    "LocalJwkProvider": {
+      "file_name": "jwks.json",
+      "file_path": "./config"
+    }
+  },
+  "scope_verification": true,
+  "ignore_jwt_expiration": true,
+  "specification_name": "openapi.json",
+  "audience": ""
+}

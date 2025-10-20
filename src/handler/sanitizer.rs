@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::convert::Infallible;
 use async_trait::async_trait;
-use idem_handler::exchange::ExchangeError;
-use idem_handler::handler::Handler;
-use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
-use idem_handler_config::config::Config;
-use idem_handler_macro::ConfigurableHandler;
+use idemio::config::Config;
+use idemio::exchange::Exchange;
+use idemio::handler::Handler;
+use idemio::status::{ExchangeState, HandlerStatus};
 use lambda_http::Context;
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::http::HeaderValue;
@@ -48,7 +48,7 @@ pub struct SanitizerHandlerConfig {
 
 
 
-#[derive(ConfigurableHandler)]
+//#[derive(ConfigurableHandler)]
 pub struct SanitizerHandler {
     config: Config<SanitizerHandlerConfig>,
 }
@@ -70,6 +70,8 @@ impl SanitizerHandler {
     }
 
     fn sanitize_headers(exchange: &mut LambdaExchange, mode: &SanitizerMode, ignore_list: &Option<Vec<String>>, encode_list: &Option<Vec<String>>) -> Result<(), ()> {
+
+        // TODO - add input_mut
         let headers = match exchange.input_mut() {
             Ok(input) => {
                 &mut input.headers
@@ -193,13 +195,13 @@ impl SanitizerHandler {
 }
 
 #[async_trait]
-impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for SanitizerHandler {
+impl Handler<Exchange<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>> for SanitizerHandler {
     async fn exec(
         &self,
         exchange: &mut LambdaExchange,
-    ) -> Result<HandlerStatus, HandlerExecutionError> {
+    ) -> Result<HandlerStatus, Infallible> {
         if !self.config.get().enabled {
-            return Ok(HandlerStatus::new(Code::DISABLED));
+            return Ok(HandlerStatus::new(ExchangeState::DISABLED));
         }
         match &self.config.get().body_sanitizer {
             SanitizerSettings::Disabled => {
@@ -211,7 +213,7 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for Sanit
                 encode_list
             } => {
                 if let Err(_) = Self::sanitize_body(exchange, mode, ignore_list, encode_list) {
-                    return Ok(HandlerStatus::new(Code::SERVER_ERROR));
+                    return Ok(HandlerStatus::new(ExchangeState::SERVER_ERROR));
                 }
             }
         }
@@ -226,10 +228,14 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for Sanit
                 encode_list
             } => {
                 if let Err(_) = Self::sanitize_headers(exchange, mode, ignore_list, encode_list) {
-                    return Ok(HandlerStatus::new(Code::SERVER_ERROR));
+                    return Ok(HandlerStatus::new(ExchangeState::SERVER_ERROR));
                 }
             }
         }
-        Ok(HandlerStatus::new(Code::OK))
+        Ok(HandlerStatus::new(ExchangeState::OK))
+    }
+
+    fn name(&self) -> &str {
+        "SanitizerHandler"
     }
 }

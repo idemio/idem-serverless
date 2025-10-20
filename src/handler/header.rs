@@ -1,15 +1,20 @@
 use crate::handler::LambdaExchange;
 use async_trait::async_trait;
-use idem_handler::exchange::AttachmentKey;
-use idem_handler::handler::Handler;
-use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
-use idem_handler_config::config::Config;
-use idem_handler_macro::ConfigurableHandler;
+//use idem_handler::exchange::AttachmentKey;
+//use idem_handler::handler::Handler;
+//use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
+//use idem_handler_config::config::Config;
+//use idem_handler_macro::ConfigurableHandler;
 use lambda_http::Context;
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::http::{HeaderMap, HeaderName, HeaderValue};
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::convert::Infallible;
+use idemio::config::Config;
+use idemio::exchange::Exchange;
+use idemio::handler::Handler;
+use idemio::status::{ExchangeState, HandlerStatus};
 
 #[derive(Deserialize, Default, Clone, PartialOrd, PartialEq, Hash, Eq)]
 pub struct ModifyHeaderKey(pub String);
@@ -40,7 +45,7 @@ pub struct ModifyHeaderHandlerConfig {
     pub remove: Vec<ModifyHeaderKey>,
 }
 
-#[derive(ConfigurableHandler)]
+//#[derive(ConfigurableHandler)]
 pub struct HeaderHandler {
     config: Config<HeaderHandlerConfig>,
 }
@@ -65,22 +70,20 @@ impl HeaderHandler {
     }
 }
 
-const REMOVE_RESPONSE_HEADER_ATTACHMENT_KEY: AttachmentKey =
-    AttachmentKey("remove_response_headers");
-const UPDATE_RESPONSE_HEADER_ATTACHMENT_KEY: AttachmentKey =
-    AttachmentKey("update_response_headers");
+const REMOVE_RESPONSE_HEADER_ATTACHMENT_KEY: &'static str = "remove_response_headers";
+const UPDATE_RESPONSE_HEADER_ATTACHMENT_KEY: &'static str = "update_response_headers";
 
 #[async_trait]
-impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for HeaderHandler {
+impl Handler<Exchange<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>> for HeaderHandler {
     async fn exec(
         &self,
         exchange: &mut LambdaExchange,
-    ) -> Result<HandlerStatus, HandlerExecutionError> {
+    ) -> Result<HandlerStatus, Infallible> {
         if !self.config.get().enabled {
-            return Ok(HandlerStatus::new(Code::DISABLED));
+            return Ok(HandlerStatus::new(ExchangeState::DISABLED));
         }
 
-        let request = exchange.input().unwrap();
+        let request = exchange.input().await.unwrap();
         let request_path = request.path.as_deref().unwrap_or("/");
 
         let mut request_remove_headers = vec![];
@@ -108,39 +111,40 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for Heade
         }
 
         /* handle header request changes */
-        Self::update_headers(
-            &mut exchange.input_mut().unwrap().headers,
-            request_update_headers,
-        );
-
-        Self::remove_headers(
-            &mut exchange.input_mut().unwrap().headers,
-            request_remove_headers,
-        );
+        // TODO - add input mut
+//        Self::update_headers(
+//            &mut exchange.input().await.unwrap().headers,
+//            request_update_headers,
+//        );
+//
+//        Self::remove_headers(
+//            &mut exchange.input().await.unwrap().headers,
+//            request_remove_headers,
+//        );
 
         /* handle header response changes */
         exchange
             .attachments_mut()
-            .add_attachment::<Vec<ModifyHeaderKey>>(
+            .add::<Vec<ModifyHeaderKey>>(
                 REMOVE_RESPONSE_HEADER_ATTACHMENT_KEY,
-                Box::new(response_remove_headers),
+                response_remove_headers,
             );
         exchange
             .attachments_mut()
-            .add_attachment::<HashMap<ModifyHeaderKey, ModifyHeaderValue>>(
+            .add::<HashMap<ModifyHeaderKey, ModifyHeaderValue>>(
                 UPDATE_RESPONSE_HEADER_ATTACHMENT_KEY,
-                Box::new(response_update_headers),
+                response_update_headers,
             );
 
         exchange.add_output_listener(|response, attachments| {
             if let Some(remove_headers) = attachments
-                .attachment::<Vec<ModifyHeaderKey>>(REMOVE_RESPONSE_HEADER_ATTACHMENT_KEY)
+                .get::<Vec<ModifyHeaderKey>>(REMOVE_RESPONSE_HEADER_ATTACHMENT_KEY)
             {
                 Self::remove_headers(&mut response.headers, remove_headers.clone())
             }
 
             if let Some(update_headers) = attachments
-                .attachment::<HashMap<ModifyHeaderKey, ModifyHeaderValue>>(
+                .get::<HashMap<ModifyHeaderKey, ModifyHeaderValue>>(
                     UPDATE_RESPONSE_HEADER_ATTACHMENT_KEY,
                 )
             {
@@ -148,6 +152,10 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for Heade
             }
         });
 
-        Ok(HandlerStatus::new(Code::OK))
+        Ok(HandlerStatus::new(ExchangeState::OK))
+    }
+
+    fn name(&self) -> &str {
+        "HeaderHandler"
     }
 }

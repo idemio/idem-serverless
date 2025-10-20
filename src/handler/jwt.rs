@@ -1,11 +1,11 @@
+use std::convert::Infallible;
 use crate::ROOT_CONFIG_PATH;
 use crate::handler::LambdaExchange;
 use async_trait::async_trait;
-use idem_handler::handler::Handler;
-use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
-use idem_handler_config::config::Config;
-use idem_handler_config::config_cache::get_file;
-use idem_handler_macro::ConfigurableHandler;
+use idemio::config::Config;
+use idemio::exchange::Exchange;
+use idemio::handler::Handler;
+use idemio::status::{ExchangeState, HandlerStatus};
 use jsonwebtoken::jwk::{AlgorithmParameters, JwkSet};
 use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode, decode_header};
 use lambda_http::Context;
@@ -49,8 +49,9 @@ pub struct LocalJwkProvider {
 
 impl JwkProvider for LocalJwkProvider {
     fn jwk(&self) -> Result<JwkSet, ()> {
-        let file = get_file(&format!("{}/{}", self.file_path, self.file_name)).unwrap();
-        serde_json::from_str(&file).or(Err(()))
+//        let file = get_file(&format!("{}/{}", self.file_path, self.file_name)).unwrap();
+//        serde_json::from_str(&file).or(Err(()))
+        todo!()
     }
 }
 
@@ -91,7 +92,7 @@ impl JwkProvider for JwkProviders {
     }
 }
 
-#[derive(ConfigurableHandler)]
+//#[derive(ConfigurableHandler)]
 pub struct JwtValidationHandler {
     config: Config<JwtValidationHandlerConfig>,
 }
@@ -142,20 +143,21 @@ impl JwtValidationHandler {
 }
 
 #[async_trait]
-impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for JwtValidationHandler {
+impl Handler<Exchange<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>> for JwtValidationHandler {
+
     async fn exec(
         &self,
         exchange: &mut LambdaExchange,
-    ) -> Result<HandlerStatus, HandlerExecutionError> {
+    ) -> Result<HandlerStatus, Infallible> {
         if !self.config.get().enabled {
-            return Ok(HandlerStatus::new(Code::DISABLED));
+            return Ok(HandlerStatus::new(ExchangeState::DISABLED));
         }
 
-        let request = match exchange.input() {
+        let request = match exchange.input().await {
             Ok(req) => req,
             Err(_) => {
                 return Ok(
-                    HandlerStatus::new(Code::SERVER_ERROR).set_message("Unable to get request")
+                    HandlerStatus::new(ExchangeState::SERVER_ERROR).message("Unable to get request")
                 );
             }
         };
@@ -172,8 +174,8 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for JwtVa
                 .collect::<Vec<&str>>();
 
             if auth_header_parts.len() != 2 || !(auth_header_parts[0].to_lowercase() == "bearer") {
-                return Ok(HandlerStatus::new(Code::CLIENT_ERROR)
-                    .set_message("Missing client bearer token header"));
+                return Ok(HandlerStatus::new(ExchangeState::CLIENT_ERROR)
+                    .message("Missing client bearer token header"));
             }
 
             let token = auth_header_parts[1];
@@ -182,7 +184,7 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for JwtVa
                 Ok(jwk_set) => jwk_set,
                 Err(_) => {
                     return Ok(
-                        HandlerStatus::new(Code::SERVER_ERROR).set_message("Unable to fetch JWKs")
+                        HandlerStatus::new(ExchangeState::SERVER_ERROR).message("Unable to fetch JWKs")
                     );
                 }
             };
@@ -191,7 +193,7 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for JwtVa
                 Ok(jwt_header) => jwt_header,
                 Err(_) => {
                     return Ok(
-                        HandlerStatus::new(Code::CLIENT_ERROR).set_message("Malformed JWT header")
+                        HandlerStatus::new(ExchangeState::CLIENT_ERROR).message("Malformed JWT header")
                     );
                 }
             };
@@ -200,7 +202,7 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for JwtVa
                 Some(kid) => kid,
                 None => {
                     return Ok(
-                        HandlerStatus::new(Code::CLIENT_ERROR).set_message("JWT is missing kid")
+                        HandlerStatus::new(ExchangeState::CLIENT_ERROR).message("JWT is missing kid")
                     );
                 }
             };
@@ -208,8 +210,8 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for JwtVa
             let matching_jwk = match jwk_set.find(&kid) {
                 Some(matching_jwk) => matching_jwk,
                 None => {
-                    return Ok(HandlerStatus::new(Code::CLIENT_ERROR)
-                        .set_message("No matching JWK for kid"));
+                    return Ok(HandlerStatus::new(ExchangeState::CLIENT_ERROR)
+                        .message("No matching JWK for kid"));
                 }
             };
             let decoding_key = match &matching_jwk.algorithm {
@@ -217,14 +219,14 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for JwtVa
                     match DecodingKey::from_rsa_components(&rsa_params.n, &rsa_params.e) {
                         Ok(decoding_key) => decoding_key,
                         Err(_) => {
-                            return Ok(HandlerStatus::new(Code::CLIENT_ERROR)
-                                .set_message("Malformed RSA key"));
+                            return Ok(HandlerStatus::new(ExchangeState::CLIENT_ERROR)
+                                .message("Malformed RSA key"));
                         }
                     }
                 }
                 _ => {
-                    return Ok(HandlerStatus::new(Code::CLIENT_ERROR)
-                        .set_message("Unsupported JWT algorithm"));
+                    return Ok(HandlerStatus::new(ExchangeState::CLIENT_ERROR)
+                        .message("Unsupported JWT algorithm"));
                 }
             };
 
@@ -232,7 +234,7 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for JwtVa
             let token_data = match decode::<Value>(token, &decoding_key, &validation) {
                 Ok(token_data) => token_data,
                 Err(_) => {
-                    return Ok(HandlerStatus::new(Code::CLIENT_ERROR).set_message("Invalid JWT"));
+                    return Ok(HandlerStatus::new(ExchangeState::CLIENT_ERROR).message("Invalid JWT"));
                 }
             };
 
@@ -240,7 +242,7 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for JwtVa
             let (request_path, method) = match (&request.path, &request.http_method) {
                 (None, _) => {
                     return Ok(
-                        HandlerStatus::new(Code::CLIENT_ERROR).set_message("Missing request path")
+                        HandlerStatus::new(ExchangeState::CLIENT_ERROR).message("Missing request path")
                     );
                 }
                 (Some(path), method) => (path, method),
@@ -257,30 +259,34 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for JwtVa
                     Err(_) => todo!(),
                 };
                 if let Err(_) = Self::validate_scope(spec, &request_path, &method.to_string(), &claims) {
-                    return Ok(HandlerStatus::new(Code::CLIENT_ERROR)
-                        .set_message("Invalid scope for token"));
+                    return Ok(HandlerStatus::new(ExchangeState::CLIENT_ERROR)
+                        .message("Invalid scope for token"));
                 }
             }
 
             if let Err(_) = self.validate_aud(&claims) {
-                return Ok(HandlerStatus::new(Code::CLIENT_ERROR)
-                    .set_message("Invalid audience for token"));
+                return Ok(HandlerStatus::new(ExchangeState::CLIENT_ERROR)
+                    .message("Invalid audience for token"));
             }
 
             if let Err(_) = self.validate_iss(&claims) {
                 return Ok(
-                    HandlerStatus::new(Code::CLIENT_ERROR).set_message("Invalid issuer for token")
+                    HandlerStatus::new(ExchangeState::CLIENT_ERROR).message("Invalid issuer for token")
                 );
             }
 
             if let Err(_) = self.validate_exp(&claims) {
-                return Ok(HandlerStatus::new(Code::CLIENT_ERROR).set_message("Expired token"));
+                return Ok(HandlerStatus::new(ExchangeState::CLIENT_ERROR).message("Expired token"));
             }
 
-            Ok(HandlerStatus::new(Code::OK))
+            Ok(HandlerStatus::new(ExchangeState::OK))
         } else {
-            Ok(HandlerStatus::new(Code::CLIENT_ERROR).set_message("Missing JWT"))
+            Ok(HandlerStatus::new(ExchangeState::CLIENT_ERROR).message("Missing JWT"))
         }
+    }
+
+    fn name(&self) -> &str {
+        "JwtValidationHandler"
     }
 }
 
@@ -290,10 +296,6 @@ mod test {
     use crate::handler::jwt::{JwkProvider, JwkProviders, JwtValidationHandler, JwtValidationHandlerConfig};
     use base64::Engine;
     use base64::prelude::BASE64_URL_SAFE_NO_PAD;
-    use idem_handler::exchange::Exchange;
-    use idem_handler::handler::Handler;
-    use idem_handler::status::Code;
-    use idem_handler_config::config::{Config, ConfigProvider, DefaultConfigProvider, FileConfigProvider};
     use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
     use lambda_http::aws_lambda_events::apigw::ApiGatewayProxyRequest;
     use lambda_http::http::HeaderValue;
@@ -302,6 +304,8 @@ mod test {
     use serde::{Deserialize, Serialize};
     use std::error::Error;
     use std::fs::File;
+    use idemio::config::{Config, DefaultConfigProvider};
+    use idemio::exchange::Exchange;
     use serde_json::{json, Value};
 
     fn b64_decode(s: &str) -> Result<Vec<u8>, Box<dyn Error>> {
@@ -393,7 +397,7 @@ mod test {
             .await
             .unwrap();
         let result_code = result.code();
-        if result_code.any_flags(Code::OK) {
+        if result_code.any_flags(ExchangeState::OK) {
             assert!(
                 true,
                 "Handler returned an OK status meaning validation passed"

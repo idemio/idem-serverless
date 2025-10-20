@@ -1,9 +1,11 @@
+use std::convert::Infallible;
 use serde::Deserialize;
 use async_trait::async_trait;
-use idem_handler::handler::Handler;
-use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
-use idem_handler_config::config::Config;
-use idem_handler_macro::ConfigurableHandler;
+use idemio::handler::Handler;
+use idemio::status::{ExchangeState, HandlerStatus};
+use idemio::config::Config;
+use idemio::exchange::Exchange;
+use idemio_macro::ConfigurableHandler;
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::{Body, Context};
 use crate::handler::LambdaExchange;
@@ -15,24 +17,23 @@ pub struct EchoRequestHandlerConfig {
     pub static_body: Option<String>
 }
 
-
-
-#[derive(ConfigurableHandler)]
+//#[derive(ConfigurableHandler)]
 pub struct EchoRequestHandler {
     config: Config<EchoRequestHandlerConfig>,
 }
 
 #[async_trait]
-impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for EchoRequestHandler {
+impl Handler<Exchange<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>> for EchoRequestHandler {
+
     async fn exec(
         &self,
         exchange: &mut LambdaExchange,
-    ) -> Result<HandlerStatus, HandlerExecutionError> {
+    ) -> Result<HandlerStatus, Infallible> {
         if !self.config.get().enabled {
-            return Ok(HandlerStatus::new(Code::DISABLED));
+            return Ok(HandlerStatus::new(ExchangeState::DISABLED));
         }
 
-        let request_payload = exchange.take_request().unwrap();
+        let request_payload = exchange.take_input().await.unwrap();
         let echo_body: Option<Body> = if self.config.get().static_body.is_some() {
             match self.config.get().static_body.as_ref() {
                 Some(x) if !x.is_empty() => Some(Body::Text(x.clone())),
@@ -57,8 +58,12 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for EchoR
             response_payload.headers.extend(request_headers);
         }
 
-        exchange.save_output(response_payload);
-        Ok(HandlerStatus::new(Code::OK))
+        exchange.set_output(response_payload);
+        Ok(HandlerStatus::new(ExchangeState::OK))
+    }
+
+    fn name(&self) -> &str {
+        "EchoRequestHandler"
     }
 }
 

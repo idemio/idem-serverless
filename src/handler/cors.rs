@@ -1,14 +1,19 @@
 use std::collections::HashMap;
+use std::convert::Infallible;
 use serde::{Deserialize, Serialize};
 use async_trait::async_trait;
-use idem_handler::exchange::AttachmentKey;
-use idem_handler::handler::Handler;
-use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
-use idem_handler_config::config::Config;
+use idemio::config::Config;
+use idemio::exchange::Exchange;
+use idemio::handler::Handler;
+use idemio::status::{ExchangeState, HandlerStatus};
+//use idem_handler::exchange::AttachmentKey;
+//use idem_handler::handler::Handler;
+//use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
+//use idem_handler_config::config::Config;
 use lambda_http::Context;
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::http::HeaderValue;
-use idem_handler_macro::ConfigurableHandler;
+//use idem_handler_macro::ConfigurableHandler;
 use crate::handler::LambdaExchange;
 
 #[derive(Deserialize, Serialize, Default, Clone)]
@@ -36,7 +41,7 @@ const ACCESS_CONTROL_MAX_AGE: &str = "Access-Control-Max-Age";
 const ACCESS_CONTROL_ALLOW_METHODS: &str = "Access-Control-Allow-Methods";
 const ACCESS_CONTROL_ALLOW_HEADERS: &str = "Access-Control-Allow-Headers";
 
-#[derive(ConfigurableHandler)]
+//#[derive(ConfigurableHandler)]
 pub struct CorsHandler {
     config: Config<CorsHandlerConfig>,
 }
@@ -80,20 +85,20 @@ impl CorsHandler {
     }
 }
 
-const ORIGIN_ATTACHMENT_KEY: AttachmentKey = AttachmentKey("origin_header_value");
+const ORIGIN_ATTACHMENT_KEY: &'static str = "origin_header_value";
 
 #[async_trait]
-impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for CorsHandler {
+impl Handler<Exchange<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>> for CorsHandler {
     async fn exec(
         &self,
         exchange: &mut LambdaExchange,
-    ) -> Result<HandlerStatus, HandlerExecutionError> {
+    ) -> Result<HandlerStatus, Infallible> {
         if !self.config.get().enabled {
-            return Ok(HandlerStatus::new(Code::DISABLED));
+            return Ok(HandlerStatus::new(ExchangeState::DISABLED));
         }
 
         let mut found_origin_header: Option<String> = None;
-        let request = exchange.input().unwrap();
+        let request = exchange.input().await.unwrap();
         if let Some(origin_header) = request
             .headers
             .iter()
@@ -140,9 +145,9 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for CorsH
                 } else {
                     /* invalid origin, early return */
                     response.status_code = 403;
-                    exchange.save_output(response);
+                    exchange.set_output(response);
                     return Ok(
-                        HandlerStatus::new(Code::CLIENT_ERROR).set_message("Origin is forbidden")
+                        HandlerStatus::new(ExchangeState::CLIENT_ERROR).message("Origin is forbidden")
                     );
                 }
 
@@ -190,7 +195,7 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for CorsH
                     .any(|origin| origin.to_lowercase().eq(origin_header_value))
                 {
                     // TODO - Handle validation failure return.
-                    return Ok(HandlerStatus::new(Code::REQUEST_COMPLETED));
+                    return Ok(HandlerStatus::new(ExchangeState::EXCHANGE_COMPLETED));
                 }
             }
         }
@@ -200,10 +205,10 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for CorsH
         if let Some(found_origin_header) = found_origin_header {
             exchange
                 .attachments_mut()
-                .add_attachment::<String>(ORIGIN_ATTACHMENT_KEY, Box::new(found_origin_header));
+                .add::<String>(ORIGIN_ATTACHMENT_KEY, found_origin_header);
             exchange.add_output_listener(|response, attachments| {
                 if let Some(origin_header_value) =
-                    attachments.attachment::<String>(ORIGIN_ATTACHMENT_KEY)
+                    attachments.get::<String>(ORIGIN_ATTACHMENT_KEY)
                 {
                     response.headers.insert(
                         ACCESS_CONTROL_ALLOW_ORIGIN,
@@ -212,7 +217,11 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for CorsH
                 }
             });
         }
-        Ok(HandlerStatus::new(Code::OK))
+        Ok(HandlerStatus::new(ExchangeState::OK))
+    }
+
+    fn name(&self) -> &str {
+        "CorsHandler"
     }
 }
 

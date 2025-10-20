@@ -1,5 +1,4 @@
 use core::result::Result;
-use idem_handler_config::config_cache::init_or_replace_config;
 use lambda_http::{lambda_runtime, service_fn, tracing, Error};
 mod handler;
 mod entry;
@@ -9,9 +8,9 @@ pub const ROOT_CONFIG_PATH: &str = "/opt/config";
 
 fn main() -> Result<(), Error> {
 
-    if let Err(_) = init_or_replace_config(format!("{}/{}", ROOT_CONFIG_PATH, "handlers.json").as_str()) {
-        panic!("Failed to load config");
-    }
+//    if let Err(_) = init_or_replace_config(format!("{}/{}", ROOT_CONFIG_PATH, "handlers.json").as_str()) {
+//        panic!("Failed to load config");
+//    }
 
 
     tokio::runtime::Builder::new_current_thread()

@@ -1,9 +1,9 @@
+use std::convert::Infallible;
 use async_trait::async_trait;
-use idem_handler::exchange::AttachmentKey;
-use idem_handler::handler::Handler;
-use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
-use idem_handler_config::config::Config;
-use idem_handler_macro::ConfigurableHandler;
+use idemio::config::Config;
+use idemio::exchange::{AttachmentKey, Exchange};
+use idemio::handler::Handler;
+use idemio::status::{ExchangeState, HandlerStatus};
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::http::{HeaderMap, HeaderName, HeaderValue};
 use lambda_http::{Context, tracing};
@@ -31,7 +31,7 @@ impl Default for TraceabilityHandlerConfig {
     }
 }
 
-#[derive(ConfigurableHandler)]
+//#[derive(ConfigurableHandler)]
 pub struct TraceabilityHandler {
     config: Config<TraceabilityHandlerConfig>,
 }
@@ -61,23 +61,23 @@ impl TraceabilityHandler {
     }
 }
 
-const TRACE_V_ATTACHMENT_KEY: AttachmentKey = AttachmentKey("trace_v");
-const CORR_V_ATTACHMENT_KEY: AttachmentKey = AttachmentKey("corr_v");
-const CORR_H_ATTACHMENT_KEY: AttachmentKey = AttachmentKey("corr_h");
-const TRACE_H_ATTACHMENT_KEY: AttachmentKey = AttachmentKey("trace_h");
+const TRACE_V_ATTACHMENT_KEY: &'static str = "trace_v";
+const CORR_V_ATTACHMENT_KEY: &'static str = "corr_v";
+const CORR_H_ATTACHMENT_KEY: &'static str = "corr_h";
+const TRACE_H_ATTACHMENT_KEY: &'static str = "trace_h";
 
 #[async_trait]
-impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for TraceabilityHandler {
+impl Handler<Exchange<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>> for TraceabilityHandler {
     async fn exec(
         &self,
         exchange: &mut LambdaExchange,
-    ) -> Result<HandlerStatus, HandlerExecutionError> {
+    ) -> Result<HandlerStatus, Infallible> {
         tracing::debug!("Traceability handler starts");
         if !self.config.get().enabled {
-            return Ok(HandlerStatus::new(Code::DISABLED));
+            return Ok(HandlerStatus::new(ExchangeState::DISABLED));
         }
 
-        let request = exchange.input().unwrap();
+        let request = exchange.input().await.unwrap();
         let cid_header_name = self.config.get().correlation_header_name.clone();
         let cid = Self::find_or_create_uuid(
             &request.headers,
@@ -101,22 +101,22 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for Trace
                 if self.config.get().add_trace_to_response {
                     exchange
                         .attachments_mut()
-                        .add_attachment::<String>(TRACE_V_ATTACHMENT_KEY, Box::new(tid));
+                        .add::<String>(TRACE_V_ATTACHMENT_KEY, tid);
                     exchange
                         .attachments_mut()
-                        .add_attachment::<String>(CORR_V_ATTACHMENT_KEY, Box::new(cid.clone()));
-                    exchange.attachments_mut().add_attachment::<String>(
+                        .add::<String>(CORR_V_ATTACHMENT_KEY, cid.clone());
+                    exchange.attachments_mut().add::<String>(
                         CORR_H_ATTACHMENT_KEY,
-                        Box::new(cid_header_name.clone()),
+                        cid_header_name.clone(),
                     );
-                    exchange.attachments_mut().add_attachment::<String>(
+                    exchange.attachments_mut().add::<String>(
                         TRACE_H_ATTACHMENT_KEY,
-                        Box::new(tid_header_name),
+                        tid_header_name,
                     );
                     exchange.add_output_listener(|response, attachments| {
                         if let (Some(cid_header), Some(cid_value)) = (
-                            attachments.attachment::<String>(CORR_H_ATTACHMENT_KEY),
-                            attachments.attachment::<String>(CORR_V_ATTACHMENT_KEY),
+                            attachments.get::<String>(CORR_H_ATTACHMENT_KEY),
+                            attachments.get::<String>(CORR_V_ATTACHMENT_KEY),
                         ) {
                             response.headers.insert(
                                 HeaderName::from_bytes(cid_header.as_bytes()).unwrap(),
@@ -125,8 +125,8 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for Trace
                         }
 
                         if let (Some(tid_header), Some(tid_value)) = (
-                            attachments.attachment::<String>(TRACE_H_ATTACHMENT_KEY),
-                            attachments.attachment::<String>(TRACE_V_ATTACHMENT_KEY),
+                            attachments.get::<String>(TRACE_H_ATTACHMENT_KEY),
+                            attachments.get::<String>(TRACE_V_ATTACHMENT_KEY),
                         ) {
                             response.headers.insert(
                                 HeaderName::from_bytes(tid_header.as_bytes()).unwrap(),
@@ -140,6 +140,8 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for Trace
             let inserted_header_name: HeaderName =
                 HeaderName::from_lowercase(cid_header_name.to_lowercase().as_bytes()).unwrap();
             let inserted_header_value: HeaderValue = HeaderValue::from_str(cid.as_str()).unwrap();
+
+            // TODO -- add input mut
             exchange
                 .input_mut()
                 .unwrap()
@@ -147,7 +149,11 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for Trace
                 .insert(inserted_header_name, inserted_header_value);
         }
 
-        Ok(HandlerStatus::new(Code::OK))
+        Ok(HandlerStatus::new(ExchangeState::OK))
+    }
+
+    fn name(&self) -> &str {
+        "TraceabilityHandler"
     }
 }
 

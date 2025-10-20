@@ -1,12 +1,17 @@
+use std::convert::Infallible;
 use serde::Deserialize;
 use async_trait::async_trait;
 use aws_sdk_lambda::config::BehaviorVersion;
 use aws_sdk_lambda::primitives::Blob;
 use aws_sdk_lambda::Client as LambdaClient;
-use idem_handler::handler::Handler;
-use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
-use idem_handler_config::config::Config;
-use idem_handler_macro::ConfigurableHandler;
+use idemio::config::Config;
+use idemio::exchange::Exchange;
+use idemio::handler::Handler;
+use idemio::status::{ExchangeState, HandlerStatus};
+//use idem_handler::handler::Handler;
+//use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
+//use idem_handler_config::config::Config;
+//use idem_handler_macro::ConfigurableHandler;
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::http::header::CONTENT_TYPE;
 use lambda_http::Context;
@@ -21,28 +26,26 @@ pub struct HealthCheckHandlerConfig {
     pub downstream_function: String,
     pub downstream_function_health_payload: String,
 }
-
-
-
 const HEALTH_STATUS: u32 = 200u32;
 const HEALTH_BODY: &str = "OK";
 const HEALTH_ERROR: &str = "ERROR";
 
-#[derive(ConfigurableHandler)]
+//#[derive(ConfigurableHandler)]
 pub struct HealthCheckHandler {
     config: Config<HealthCheckHandlerConfig>,
 }
 
 #[async_trait]
-impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for HealthCheckHandler {
-    async fn exec(&self, exchange: &mut LambdaExchange) -> Result<HandlerStatus, HandlerExecutionError>
+impl Handler<Exchange<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>> for HealthCheckHandler {
+
+    async fn exec(&self, exchange: &mut LambdaExchange) -> Result<HandlerStatus, Infallible>
     {
         /* maybe we can grab this from a central location instead of the struct itself? cache? */
 
         let client =
             LambdaClient::new(&aws_config::load_defaults(BehaviorVersion::latest()).await);
         if !self.config.get().enabled {
-            return Ok(HandlerStatus::new(Code::DISABLED));
+            return Ok(HandlerStatus::new(ExchangeState::DISABLED));
         }
         let mut response = ApiGatewayProxyResponse::default();
         let response_status: u32 = if self.config.get().downstream_enabled {
@@ -73,7 +76,11 @@ impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for Healt
             response.status_code = response_status as i64;
             response.body = Some(HEALTH_ERROR.into());
         }
-        exchange.save_output(response);
-        Ok(HandlerStatus::new(Code::OK))
+        exchange.set_output(response);
+        Ok(HandlerStatus::new(ExchangeState::OK))
+    }
+
+    fn name(&self) -> &str {
+        "HealthCheckHandler"
     }
 }

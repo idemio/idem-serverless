@@ -1,11 +1,16 @@
+use std::convert::Infallible;
 use crate::ROOT_CONFIG_PATH;
 use crate::handler::LambdaExchange;
 use async_trait::async_trait;
 use http::{HeaderMap, Method, Request};
-use idem_handler::handler::Handler;
-use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
-use idem_handler_config::config::Config;
-use idem_handler_macro::ConfigurableHandler;
+use idemio::config::Config;
+use idemio::exchange::Exchange;
+use idemio::handler::Handler;
+use idemio::status::{ExchangeState, HandlerStatus};
+//use idem_handler::handler::Handler;
+//use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
+//use idem_handler_config::config::Config;
+//use idem_handler_macro::ConfigurableHandler;
 use lambda_http::Context;
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use oasert::types::HttpLike;
@@ -41,34 +46,38 @@ impl Default for ValidatorHandlerConfig {
 }
 
 
-#[derive(ConfigurableHandler)]
+//#[derive(ConfigurableHandler)]
 pub struct ValidatorHandler {
     config: Config<ValidatorHandlerConfig>,
 }
 
 #[async_trait]
-impl Handler<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context> for ValidatorHandler {
+impl Handler<Exchange<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>> for ValidatorHandler {
     async fn exec(
         &self,
         exchange: &mut LambdaExchange,
-    ) -> Result<HandlerStatus, HandlerExecutionError> {
+    ) -> Result<HandlerStatus, Infallible> {
         if !self.config.get().enable {
-            return Ok(HandlerStatus::new(Code::DISABLED));
+            return Ok(HandlerStatus::new(ExchangeState::DISABLED));
         }
 
         if self.config.get().loaded_openapi_specification.is_some() {
             let validator = self.config.get().loaded_openapi_specification.as_ref().unwrap();
-            let request = exchange.input().unwrap();
+            let request = exchange.input().await.unwrap();
             let request = ApiGatewayProxyRequestWrapper::new(request);
             let result = validator.validate_request(&request, None);
             if result.is_err() {
-                return Ok(HandlerStatus::new(Code::CLIENT_ERROR)
-                    .set_message("Request validation failed"));
+                return Ok(HandlerStatus::new(ExchangeState::CLIENT_ERROR)
+                    .message("Request validation failed"));
             }
         }
-        
 
-        Ok(HandlerStatus::new(Code::OK))
+
+        Ok(HandlerStatus::new(ExchangeState::OK))
+    }
+
+    fn name(&self) -> &str {
+        "ValidatorHandler"
     }
 }
 

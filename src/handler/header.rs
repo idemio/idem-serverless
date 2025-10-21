@@ -1,10 +1,5 @@
 use crate::handler::LambdaExchange;
 use async_trait::async_trait;
-//use idem_handler::exchange::AttachmentKey;
-//use idem_handler::handler::Handler;
-//use idem_handler::status::{Code, HandlerExecutionError, HandlerStatus};
-//use idem_handler_config::config::Config;
-//use idem_handler_macro::ConfigurableHandler;
 use lambda_http::Context;
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
 use lambda_http::http::{HeaderMap, HeaderName, HeaderValue};
@@ -47,7 +42,7 @@ pub struct ModifyHeaderHandlerConfig {
 
 //#[derive(ConfigurableHandler)]
 pub struct HeaderHandler {
-    config: Config<HeaderHandlerConfig>,
+    pub(crate) config: Config<HeaderHandlerConfig>,
 }
 
 impl HeaderHandler {
@@ -112,15 +107,15 @@ impl Handler<Exchange<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>>
 
         /* handle header request changes */
         // TODO - add input mut
-//        Self::update_headers(
-//            &mut exchange.input().await.unwrap().headers,
-//            request_update_headers,
-//        );
-//
-//        Self::remove_headers(
-//            &mut exchange.input().await.unwrap().headers,
-//            request_remove_headers,
-//        );
+        Self::update_headers(
+            &mut exchange.input_mut().await.unwrap().headers,
+            request_update_headers,
+        );
+
+        Self::remove_headers(
+            &mut exchange.input_mut().await.unwrap().headers,
+            request_remove_headers,
+        );
 
         /* handle header response changes */
         exchange

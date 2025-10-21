@@ -26,7 +26,7 @@ const FUNCTION_NAME_SEPARATOR: &str = "@";
 
 //#[derive(ConfigurableHandler)]
 pub struct LambdaProxyHandler {
-    config: Config<LambdaProxyHandlerConfig>,
+    pub(crate) config: Config<LambdaProxyHandlerConfig>,
 }
 
 #[async_trait]

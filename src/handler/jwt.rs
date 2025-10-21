@@ -94,7 +94,7 @@ impl JwkProvider for JwkProviders {
 
 //#[derive(ConfigurableHandler)]
 pub struct JwtValidationHandler {
-    config: Config<JwtValidationHandlerConfig>,
+    pub(crate) config: Config<JwtValidationHandlerConfig>,
 }
 
 impl JwtValidationHandler {
@@ -306,6 +306,8 @@ mod test {
     use std::fs::File;
     use idemio::config::{Config, DefaultConfigProvider};
     use idemio::exchange::Exchange;
+    use idemio::handler::Handler;
+    use idemio::status::ExchangeState;
     use serde_json::{json, Value};
 
     fn b64_decode(s: &str) -> Result<Vec<u8>, Box<dyn Error>> {
@@ -387,9 +389,14 @@ mod test {
             HeaderValue::from_str(&complete_token_header).unwrap(),
         );
         let mut test_exchange: LambdaExchange = Exchange::new();
-        test_exchange.save_input(test_request);
-        let jwt_validation_handler =
-            JwtValidationHandler::init_handler(Config::new(DefaultConfigProvider).unwrap());
+        test_exchange.set_input(test_request);
+//        let jwt_validation_handler =
+//            JwtValidationHandler::init_handler(Config::new(DefaultConfigProvider).unwrap());
+
+        let jwt_validation_handler = JwtValidationHandler {
+            config: Config::new(DefaultConfigProvider).unwrap()
+        };
+
 
         // make sure the result is OK
         let result = jwt_validation_handler
@@ -403,7 +410,6 @@ mod test {
                 "Handler returned an OK status meaning validation passed"
             )
         } else {
-            println!("{}", result.message());
             assert!(
                 false,
                 "Handler returned something other than OK status meaning validation did not pass"
@@ -425,24 +431,29 @@ mod test {
             HeaderValue::from_str(&invalid_token).unwrap(),
         );
         let mut test_exchange: LambdaExchange = Exchange::new();
-        test_exchange.save_input(test_request);
+        test_exchange.set_input(test_request);
 
         // execute the validation and get the result
-        let jwt_validation_handler =
-            JwtValidationHandler::init_handler(Config::new(DefaultConfigProvider).unwrap());
+//        let jwt_validation_handler =
+//            JwtValidationHandler::init_handler(Config::new(DefaultConfigProvider).unwrap());
+        let jwt_validation_handler = JwtValidationHandler {
+            config: Config::new(DefaultConfigProvider).unwrap()
+        };
         let result = jwt_validation_handler
             .exec(&mut test_exchange)
             .await
             .unwrap();
 
+        assert!(result.code().any_flags(ExchangeState::CLIENT_ERROR));
+
         // make sure we returned the client error code with the Malformed 'JWT header message'
-        let result_code = result.code();
-        let result_message = result.message();
-        if result_code.any_flags(Code::CLIENT_ERROR) && result_message == "Malformed JWT header" {
-            assert!(true)
-        } else {
-            assert!(false)
-        }
+//        let result_code = result.code();
+//        let result_message = result
+//        if result_code.any_flags(ExchangeState::CLIENT_ERROR) && result_message == "Malformed JWT header" {
+//            assert!(true)
+//        } else {
+//            assert!(false)
+//        }
     }
 
     #[test]

@@ -1,7 +1,7 @@
 use std::convert::Infallible;
 use async_trait::async_trait;
 use idemio::config::Config;
-use idemio::exchange::{AttachmentKey, Exchange};
+use idemio::exchange::Exchange;
 use idemio::handler::Handler;
 use idemio::status::{ExchangeState, HandlerStatus};
 use lambda_http::aws_lambda_events::apigw::{ApiGatewayProxyRequest, ApiGatewayProxyResponse};
@@ -144,6 +144,7 @@ impl Handler<Exchange<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>>
             // TODO -- add input mut
             exchange
                 .input_mut()
+                .await
                 .unwrap()
                 .headers
                 .insert(inserted_header_name, inserted_header_value);

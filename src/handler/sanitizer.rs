@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::convert::Infallible;
 use async_trait::async_trait;
+use http::HeaderMap;
 use idemio::config::Config;
 use idemio::exchange::Exchange;
 use idemio::handler::Handler;
@@ -69,10 +70,10 @@ impl SanitizerHandler {
         }
     }
 
-    fn sanitize_headers(exchange: &mut LambdaExchange, mode: &SanitizerMode, ignore_list: &Option<Vec<String>>, encode_list: &Option<Vec<String>>) -> Result<(), ()> {
+    async fn sanitize_headers(exchange: &mut LambdaExchange, mode: &SanitizerMode, ignore_list: &Option<Vec<String>>, encode_list: &Option<Vec<String>>) -> Result<(), ()> {
 
         // TODO - add input_mut
-        let headers = match exchange.input_mut() {
+        let headers = match exchange.input_mut().await {
             Ok(input) => {
                 &mut input.headers
             }
@@ -98,17 +99,12 @@ impl SanitizerHandler {
                 }
                 Ok(())
             }
-            SanitizerMode::Uri(mode) => {
-                todo!()
-            }
-            SanitizerMode::Xml(mode) => {
-                todo!()
-            }
+            _ => todo!("Implement header sanitizer for modes")
         }
     }
 
-    fn sanitize_body(exchange: &mut LambdaExchange, mode: &SanitizerMode, ignore_list: &Option<Vec<String>>, encode_list: &Option<Vec<String>>) -> Result<(), ()> {
-        let body: Value = match exchange.input() {
+   async fn sanitize_body(exchange: &mut LambdaExchange, mode: &SanitizerMode, ignore_list: &Option<Vec<String>>, encode_list: &Option<Vec<String>>) -> Result<(), ()> {
+        let body: Value = match exchange.input().await {
             Ok(input) => {
                 match &input.body {
                     None => return Ok(()),
@@ -153,7 +149,7 @@ impl SanitizerHandler {
                 todo!("Implement XML encoder for body")
             }
         };
-        if let Ok(input) = exchange.input_mut() {
+        if let Ok(input) = exchange.input_mut().await {
             if let Ok(value) = serde_json::to_string(&Value::Object(sanitized_body)) {
                 input.body = Some(value);
                 return Ok(())
@@ -212,7 +208,7 @@ impl Handler<Exchange<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>>
                 ignore_list,
                 encode_list
             } => {
-                if let Err(_) = Self::sanitize_body(exchange, mode, ignore_list, encode_list) {
+                if let Err(_) = Self::sanitize_body(exchange, mode, ignore_list, encode_list).await {
                     return Ok(HandlerStatus::new(ExchangeState::SERVER_ERROR));
                 }
             }
@@ -227,7 +223,7 @@ impl Handler<Exchange<ApiGatewayProxyRequest, ApiGatewayProxyResponse, Context>>
                 ignore_list,
                 encode_list
             } => {
-                if let Err(_) = Self::sanitize_headers(exchange, mode, ignore_list, encode_list) {
+                if let Err(_) = Self::sanitize_headers(exchange, mode, ignore_list, encode_list).await {
                     return Ok(HandlerStatus::new(ExchangeState::SERVER_ERROR));
                 }
             }
